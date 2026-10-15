@@ -32,13 +32,17 @@ export const DEFAULT_CATEGORIES: Array<Pick<Category, "name" | "kind" | "icon" |
   { name: "Outras receitas", kind: "income", icon: "more", color: "#868E96" },
 ];
 
+export const DEFAULT_ACCOUNT: Omit<Account, "id" | "createdAt" | "updatedAt" | "deletedAt"> = {
+  name: "Conta principal", type: "checking", color: "#FF8A1F", initialBalance: 0, creditLimit: null,
+};
+
 /** Creates the starter categories and account on the very first run. */
 export function defaultRecords() {
   const now = stamp();
   return {
     categories: DEFAULT_CATEGORIES.map((c, i) => fresh<Category>(c, now + i)),
     accounts: [
-      fresh<Account>({ name: "Conta principal", type: "checking", color: "#FF8A1F", initialBalance: 0, creditLimit: null }, now),
+      fresh<Account>(DEFAULT_ACCOUNT, now),
     ],
   };
 }

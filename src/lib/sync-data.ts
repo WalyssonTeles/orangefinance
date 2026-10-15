@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { backupSchema } from "./backup-schema";
 import type { FinanceDB } from "./db";
+import { DEFAULT_ACCOUNT, DEFAULT_CATEGORIES } from "./repo";
 
 const schema = backupSchema.omit({ app: true, version: true, exportedAt: true, settings: true }).extend({
   settings: z.array(z.object({ key: z.literal("userName"), value: z.string() })).max(1),
@@ -33,7 +34,17 @@ export function parseSyncData(value: unknown): SyncData {
     const keys = result.data[table].map((row) => "id" in row ? row.id : row.key);
     if (new Set(keys).size !== keys.length) throw new Error("A sincronização contém registros duplicados.");
   }
+
   return result.data;
+}
+
+export function hasUserData(data: SyncData): boolean {
+  if (data.transactions.length || data.budgets.length || data.settings.some((setting) => setting.value.trim() !== "")) return true;
+  if (data.accounts.length === 0 && data.categories.length === 0) return false;
+  const accounts = data.accounts.map(({ id: _id, createdAt: _created, updatedAt: _updated, ...fields }) => fields);
+  const categories = data.categories.map(({ id: _id, createdAt: _created, updatedAt: _updated, ...fields }) => stable(fields)).sort();
+  return stable(accounts) !== stable([{ ...DEFAULT_ACCOUNT, deletedAt: null }]) ||
+    stable(categories) !== stable(DEFAULT_CATEGORIES.map((category) => stable({ ...category, deletedAt: null })).sort());
 }
 
 export async function readSyncData(database: FinanceDB): Promise<SyncData> {

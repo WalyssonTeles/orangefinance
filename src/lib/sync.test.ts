@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it } from "vitest";
 import { FinanceDB } from "./db";
 import { seedDefaults, setSetting, wipeAll, exportBackup, importBackup, parseBackup } from "./repo";
-import { readSyncData, stable, type SyncData } from "./sync-data";
+import { hasUserData, readSyncData, stable, type SyncData } from "./sync-data";
 import { connectSync, switchWorkspace, syncOnce, SyncConflict, type RemoteSnapshot, type SyncRemote } from "./sync";
 
 const databases: FinanceDB[] = [];
@@ -50,6 +50,95 @@ async function getConflict(work: () => Promise<void>): Promise<SyncConflict> {
 }
 
 describe("bidirectional synchronization", () => {
+  it("automatically connects a new account without asking about seeded starter data", async () => {
+    const a = await device(), remote = memoryRemote();
+    expect(hasUserData(await readSyncData(a))).toBe(false);
+    await expect(connectSync("user-a", remote, "auto", a)).resolves.toBe("connected");
+    expect(remote.snapshot?.revision).toBe(1);
+    expect((await a.syncState.get("connection"))?.userId).toBe("user-a");
+  });
+
+  it("automatically downloads existing account data into an unused device without uploading its seed", async () => {
+    const { a, remote } = await pair();
+    await rename(a, "Conta existente");
+    await syncOnce("user-a", remote, a);
+    const fresh = await device();
+    await setSetting("hideValues", true, fresh);
+    const before = structuredClone(remote.snapshot);
+    await expect(connectSync("user-a", remote, "auto", fresh)).resolves.toBe("connected");
+    expect(remote.snapshot).toEqual(before);
+    expect((await fresh.accounts.toArray())[0].name).toBe("Conta existente");
+    expect(await fresh.categories.count()).toBe(17);
+    expect((await fresh.settings.get("hideValues"))?.value).toBe(true);
+  });
+
+  it("automatically uploads local financial data when the account has no data", async () => {
+    const a = await device(), remote = memoryRemote();
+    await rename(a, "Meus dados anteriores");
+    await expect(connectSync("user-a", remote, "auto", a)).resolves.toBe("connected");
+    expect(remote.snapshot?.data.accounts[0].name).toBe("Meus dados anteriores");
+  });
+
+  it("does not mistake a starter-only cloud snapshot for personal data", async () => {
+    const { remote } = await pair();
+    const fresh = await device();
+    await rename(fresh, "Conta com dados locais");
+    await expect(connectSync("user-a", remote, "auto", fresh)).resolves.toBe("connected");
+    expect(remote.snapshot?.data.accounts[0].name).toBe("Conta com dados locais");
+    expect(await fresh.categories.count()).toBe(17);
+  });
+
+  it("asks only when both the device and the account have different user data, without changing either", async () => {
+    const { a, remote } = await pair();
+    await rename(a, "Computador");
+    await syncOnce("user-a", remote, a);
+    const fresh = await device();
+    await rename(fresh, "Celular com dados anteriores");
+    const before = structuredClone(remote.snapshot);
+    const localBefore = await readSyncData(fresh);
+    await expect(connectSync("user-a", remote, "auto", fresh)).resolves.toBe("choice-required");
+    expect(remote.snapshot).toEqual(before);
+    expect(await readSyncData(fresh)).toEqual(localBefore);
+    expect(await fresh.syncState.get("connection")).toBeUndefined();
+    await expect(connectSync("user-a", remote, true, fresh)).resolves.toBe("connected");
+    expect((await fresh.accounts.toArray())[0].name).toBe("Computador");
+  });
+
+  it("does not ask when the existing local and account data are already identical", async () => {
+    const { a, remote } = await pair();
+    await rename(a, "Conta existente");
+    await syncOnce("user-a", remote, a);
+    const fresh = await device();
+    await importBackup(await exportBackup(a), fresh);
+    await expect(connectSync("user-a", remote, "auto", fresh)).resolves.toBe("connected");
+  });
+
+  it("retries automatic first login if another device initializes the account simultaneously", async () => {
+    const a = await device(), b = await device(), remote = memoryRemote();
+    await rename(b, "Conta do outro aparelho");
+    remote.beforeWrite = async () => { await connectSync("user-a", remote, "auto", b); };
+    await expect(connectSync("user-a", remote, "auto", a)).resolves.toBe("connected");
+    expect((await a.accounts.toArray())[0].name).toBe("Conta do outro aparelho");
+  });
+
+  it("recognizes meaningful changes even without transactions and ignores randomized starter IDs", async () => {
+    const a = await device(), b = await device();
+    const starter = await readSyncData(a);
+    expect(stable(starter)).not.toBe(stable(await readSyncData(b)));
+    expect(hasUserData(starter)).toBe(false);
+    expect(hasUserData(await readSyncData(b))).toBe(false);
+    const account = starter.accounts[0];
+    await a.accounts.update(account.id, { initialBalance: 1 });
+    expect(hasUserData(await readSyncData(a))).toBe(true);
+    await a.accounts.update(account.id, { initialBalance: 0 });
+    await setSetting("userName", "Meu nome", a);
+    expect(hasUserData(await readSyncData(a))).toBe(true);
+    await setSetting("userName", "", a);
+    const category = starter.categories[0];
+    await a.categories.update(category.id, { deletedAt: 1 });
+    expect(hasUserData(await readSyncData(a))).toBe(true);
+  });
+
   it("uploads initial data only with explicit linking and downloads the existing cloud snapshot", async () => {
     const { a, b, remote } = await pair();
     expect(stable(await readSyncData(a))).toBe(stable(await readSyncData(b)));

@@ -67,8 +67,9 @@ Após o cache inicial, o app pode abrir offline, sem depender do computador que 
 
 O mesmo link funciona em celulares, tablets e computadores. Em **Ajustes → Conta e sincronização → Entrar com Google**, use a mesma conta Google em cada aparelho. O Supabase precisa estar configurado conforme a seção abaixo; a conta do GitHub não autentica o acesso aos dados financeiros.
 
-- **Primeiro aparelho:** exporte uma cópia de segurança e escolha **Ativar pessoal com dados deste aparelho**.
-- **Demais aparelhos:** exporte os dados locais existentes antes de escolher **Usar dados pessoais da nuvem**. Isso substitui a cópia local, sem criar contas e categorias duplicadas.
+- **Ao entrar, a sincronização começa automaticamente.** Em um aparelho novo, o app carrega os dados da conta sem perguntar sobre cópias locais ou nuvem. A conta e as categorias iniciais geradas pelo app não contam como dados pessoais.
+- Se a conta ainda não tiver dados próprios, os dados já existentes no aparelho são enviados automaticamente. Não é necessário “ativar” ou escolher uma origem.
+- Somente quando o aparelho e a conta já contiverem dados próprios diferentes, o app pausa antes de substituir qualquer coisa. Nesse caso, permite **Salvar cópia deste aparelho** e **Continuar com minha conta**, com confirmação da substituição. Os dois conjuntos ficam intactos até a decisão.
 - A sincronização envia alterações locais após uma breve espera e consulta a nuvem a cada **15 segundos** enquanto o app está visível, além de retomar ao reconectar ou reabrir.
 - Offline, as alterações ficam no IndexedDB e são reconciliadas ao retornar. O navegador pode suspender o app fechado; não há execução contínua em segundo plano.
 - Alterações em registros diferentes são mescladas. Se o mesmo registro mudar de formas diferentes em dois aparelhos, o envio pausa e **Ajustes** permite comparar as versões e escolher qual manter para os registros em conflito. Horários dos dispositivos não são usados para decidir quem vence.
@@ -93,7 +94,7 @@ Para compartilhar com sua esposa:
 
 1. Entre no espaço familiar, informe o e-mail dela em **E-mail de quem deseja convidar** e gere o convite.
 2. Copie o código e envie por um meio privado. O convite não é enviado automaticamente por e-mail.
-3. Ela entra com a própria conta Google (usando o e-mail indicado no convite). Após vincular o espaço pessoal dela, cola o **código de convite familiar** em Ajustes. Esse código de convite não é um código de login.
+3. Ela entra com a própria conta Google (usando o e-mail indicado no convite). O espaço pessoal é preparado automaticamente; depois, ela cola o **código de convite familiar** em Ajustes. Esse código de convite não é um código de login.
 4. Os dois passam a ver e editar o mesmo espaço familiar. Cada um mantém seu espaço Pessoal privado e pode alternar pelo seletor.
 
 O convite só funciona para o e-mail confirmado indicado, expira em sete dias e só pode ser aceito uma vez. Somente o responsável cria/cancela convites ou remove participantes. Participantes podem sair, mas o responsável não pode sair do próprio espaço. Todos os membros podem alterar e apagar dados financeiros **do espaço compartilhado**.

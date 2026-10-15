@@ -39,21 +39,31 @@ export function SyncPanel({ onboarding = false }: { onboarding?: boolean }) {
                 </p>
               ) : onboarding ? (
                 <div className="space-y-3 text-sm">
-                  <p>Primeiro, vincule seu espaço pessoal. Antes de vincular, exporte uma cópia local. Os dados não serão mesclados automaticamente nesta primeira conexão.</p>
-                  <Button variant="secondary" onClick={async () => {
-                    try { await downloadBackup(); setBackupError(null); }
-                    catch (cause) { setBackupError(cause instanceof Error ? cause.message : "Não foi possível exportar o backup."); }
-                  }}>Exportar cópia local</Button>
-                  <p>Se esta for sua primeira ativação da conta, envie os dados deste aparelho. Se já usa a conta em outro aparelho, carregue os dados da nuvem.</p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button disabled={sync.busy || !sync.online || !sync.spaces.length} onClick={() => void sync.connect(false)}>Ativar pessoal com dados deste aparelho</Button>
-                    <Button variant="secondary" disabled={sync.busy || !sync.online} onClick={() => {
-                      if (window.confirm("Substituir os dados locais pelos dados da nuvem? Exporte um backup antes. Esta ação não mescla os dados locais.")) void sync.connect(true);
-                    }}>Usar dados pessoais da nuvem</Button>
-                  </div>
-                  <Button variant="ghost" disabled={sync.busy || !sync.online} onClick={() => {
-                    void sync.refreshSpaces().catch((cause: unknown) => setBackupError(cause instanceof Error ? cause.message : "Não foi possível carregar os espaços."));
-                  }}>Atualizar espaços</Button>
+                  {sync.initialChoice ? (
+                    <>
+                      <p className="font-semibold">Encontramos dados diferentes neste aparelho e na sua conta.</p>
+                      <p>Para não perder nada, salve uma cópia dos dados deste aparelho antes de continuar com os dados da sua conta.</p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="secondary" disabled={sync.busy} onClick={async () => {
+                          try { await downloadBackup(); setBackupError(null); }
+                          catch (cause) { setBackupError(cause instanceof Error ? cause.message : "Não foi possível salvar a cópia."); }
+                        }}>Salvar cópia deste aparelho</Button>
+                        <Button disabled={sync.busy || !sync.online} onClick={() => {
+                          if (window.confirm("Continuar com os dados da sua conta? Os dados deste aparelho serão substituídos. Salve uma cópia antes se quiser mantê-los.")) void sync.connect(true);
+                        }}>Continuar com minha conta</Button>
+                      </div>
+                    </>
+                  ) : (
+                    <p role="status">
+                      {!sync.online ? "Conecte-se à internet para carregar seus dados. Continuaremos automaticamente quando a conexão voltar."
+                        : sync.error ? "Não conseguimos carregar seus dados agora. Nada foi apagado."
+                          : "Preparando seus dados... Isso acontece automaticamente."}
+                    </p>
+                  )}
+                  {sync.error && <Button variant="secondary" disabled={sync.busy || !sync.online} onClick={async () => {
+                    try { await sync.refreshSpaces(); setBackupError(null); await sync.connect("auto"); }
+                    catch (cause) { setBackupError(cause instanceof Error ? cause.message : "Não foi possível carregar sua conta."); }
+                  }}>Tentar novamente</Button>}
                 </div>
               ) : (
                 <>
@@ -92,7 +102,7 @@ export function SyncPanel({ onboarding = false }: { onboarding?: boolean }) {
                   )}
                 </>
               )}
-              <p className="text-xs text-muted">Ao sair, alterações ainda não enviadas ficam neste aparelho. Entre novamente na mesma conta para retomá-las.</p>
+              {sync.bound && <p className="text-xs text-muted">Ao sair, alterações ainda não enviadas ficam neste aparelho. Entre novamente na mesma conta para retomá-las.</p>}
               <Button variant="ghost" disabled={sync.busy || sync.syncing} onClick={() => void sync.signOut()}>Sair desta conta neste aparelho</Button>
             </>
           )}

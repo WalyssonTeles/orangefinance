@@ -12,6 +12,7 @@ import {
 } from "./lib/sync";
 import { fetchWorkspaces, type Workspace } from "./lib/workspaces";
 import { SyncPanel } from "./components/SyncPanel";
+import { navigate } from "./lib/router";
 
 interface SyncContextValue {
   session: Session | null;
@@ -26,11 +27,12 @@ interface SyncContextValue {
   lastSynced: Date | null;
   spaces: Workspace[];
   activeSpace: Workspace | null;
+  initialChoice: boolean;
   refreshSpaces(): Promise<void>;
   switchSpace(id: string): Promise<void>;
   signInWithGoogle(): Promise<void>;
   signOut(): Promise<void>;
-  connect(useCloud: boolean): Promise<void>;
+  connect(useCloud: boolean | "auto"): Promise<void>;
   synchronize(resolution?: Resolution): Promise<void>;
 }
 
@@ -47,6 +49,8 @@ export function SyncProvider({ children, initialAuthError = null }: { children: 
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [initialChoice, setInitialChoice] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const [message, setMessage] = useState("");
@@ -65,6 +69,9 @@ export function SyncProvider({ children, initialAuthError = null }: { children: 
   const activeSpace = spaces.find((space) => space.id === connection?.workspaceId) ?? null;
   const bound = !!connection && connection.userId === userId;
   const wrongAccount = !!connection && !!userId && connection.userId !== userId;
+  const personalSpaceId = spaces.find((space) => space.kind === "personal")?.id;
+
+  useEffect(() => { setInitialChoice(false); }, [userId]);
 
   const refreshSpaces = useCallback(async () => {
     const current = sessionRef.current;
@@ -169,9 +176,40 @@ export function SyncProvider({ children, initialAuthError = null }: { children: 
     finally { setBusy(false); }
   }, []);
 
+  const connect = useCallback(async (useCloud: boolean | "auto") => {
+    if (running.current) return;
+    await action(async () => {
+      if (!supabase || !userId) throw new Error("Entre na sua conta primeiro.");
+      const current = sessionRef.current;
+      if (!current || current.user.id !== userId) throw new Error("A sessão mudou. Entre novamente.");
+      const latest = await db.workspaceCatalog.get(userId);
+      const personal = latest?.spaces.find((space) => space.kind === "personal");
+      if (!personal) throw new Error("Não foi possível carregar sua conta. Tente novamente.");
+      running.current = true;
+      setPreparing(true);
+      try {
+        const result = await connectSync(userId, supabaseRemote(supabase, personal.id, current.access_token), useCloud);
+        if (sessionRef.current?.user.id !== userId) return;
+        setInitialChoice(result === "choice-required");
+        if (result === "connected") {
+          setMessage("Seus dados estão sincronizados.");
+          navigate("inicio");
+        }
+      } finally {
+        running.current = false;
+        setPreparing(false);
+      }
+    });
+  }, [userId, action]);
+
+  useEffect(() => {
+    if (!userId || connection !== null || !personalSpaceId || !online) return;
+    void connect("auto");
+  }, [userId, connection, personalSpaceId, online, connect]);
+
   const value = useMemo<SyncContextValue>(() => ({
-    session, busy, syncing, bound, wrongAccount, online, message, error, conflict, lastSynced,
-    synchronize, spaces, activeSpace, refreshSpaces,
+    session, busy: busy || preparing, syncing, bound, wrongAccount, online, message, error, conflict, lastSynced,
+    synchronize, spaces, activeSpace, refreshSpaces, connect, initialChoice,
     async switchSpace(id) {
       await action(async () => {
         if (!supabase || !userId) throw new Error("Entre na sua conta primeiro.");
@@ -205,21 +243,7 @@ export function SyncProvider({ children, initialAuthError = null }: { children: 
         setMessage("Você saiu. Os dados locais foram mantidos e só serão exibidos após entrar novamente na mesma conta.");
       });
     },
-    async connect(useCloud) {
-      await action(async () => {
-        if (!supabase || !userId) throw new Error("Entre na sua conta primeiro.");
-        if (running.current) throw new Error("Aguarde a operação atual terminar.");
-        running.current = true;
-        const token = sessionRef.current?.user.id === userId ? sessionRef.current.access_token : null;
-        if (!token) { running.current = false; throw new Error("A sessão mudou. Entre novamente."); }
-        const personal = spaces.find((space) => space.kind === "personal");
-        if (!personal) { running.current = false; throw new Error("O espaço pessoal ainda não foi carregado. Atualize a lista de espaços."); }
-        try { await connectSync(userId, supabaseRemote(supabase, personal.id, token), useCloud); }
-        finally { running.current = false; }
-        setMessage("Sincronização ativada.");
-      });
-    },
-  }), [session, busy, syncing, bound, wrongAccount, online, message, error, conflict, lastSynced, synchronize, action, userId, spaces, activeSpace, refreshSpaces]);
+  }), [session, busy, preparing, syncing, bound, wrongAccount, online, message, error, conflict, lastSynced, synchronize, action, userId, spaces, activeSpace, refreshSpaces, connect, initialChoice]);
 
   const locked = !!connection && !bound;
   return (

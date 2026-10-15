@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { db, type FinanceDB } from "./db";
 import { defaultRecords } from "./repo";
 import {
-  applySyncData, mergeSyncData, parseSyncData, readSyncData, stable, validateReferences,
+  applySyncData, hasUserData, mergeSyncData, parseSyncData, readSyncData, stable, validateReferences,
   type Conflict, type ConflictChoice, type SyncData,
 } from "./sync-data";
 
@@ -51,27 +51,41 @@ function tables(database: FinanceDB) {
 }
 
 export async function connectSync(
-  userId: string, remote: SyncRemote, useCloud: boolean, database: FinanceDB = db,
-): Promise<void> {
+  userId: string, remote: SyncRemote, useCloud: boolean | "auto", database: FinanceDB = db,
+): Promise<"connected" | "choice-required"> {
   const existing = await database.syncState.get("connection");
   if (existing && existing.userId !== userId) throw new Error("Este navegador já está vinculado a outra conta.");
   if (existing && existing.workspaceId !== remote.workspaceId) throw new Error("Use a troca de espaços para preservar os dados pendentes.");
-  if (existing) return;
-  const cloud = await remote.read();
-  if (cloud && !useCloud) throw new Error("Esta conta já tem dados na nuvem. Use os dados da nuvem ou exporte um backup local antes de continuar.");
-  if (!cloud && useCloud) throw new Error("Esta conta ainda não possui dados na nuvem.");
-  const local = await database.transaction("r", tables(database), () => readSyncData(database));
-  const selected = cloud?.data ?? local;
-  validateReferences(selected);
-  if (!cloud && !await remote.write(0, selected)) throw new Error("Outro aparelho acabou de ativar esta conta. Tente novamente usando os dados da nuvem.");
-  await database.transaction("rw", tables(database), async () => {
-    if (await database.syncState.get("connection")) throw new Error("A vinculação mudou em outra aba. Recarregue o aplicativo.");
-    if (stable(await readSyncData(database)) !== stable(local)) {
-      throw new Error("Os dados locais mudaram durante a vinculação. Recarregue e tente novamente.");
-    }
-    await applySyncData(database, selected);
-    await database.syncState.put({ key: "connection", userId, workspaceId: remote.workspaceId, revision: cloud?.revision ?? 1, base: selected });
-  });
+  if (existing) return "connected";
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const cloud = await remote.read();
+    const local = await database.transaction("r", tables(database), () => readSyncData(database));
+    if (useCloud === "auto" && cloud && hasUserData(local) && hasUserData(cloud.data) &&
+      stable(local) !== stable(cloud.data)) return "choice-required";
+    if (cloud && useCloud === false) throw new Error("Esta conta já tem dados na nuvem. Use os dados da nuvem ou exporte um backup local antes de continuar.");
+    if (!cloud && useCloud === true) throw new Error("Esta conta ainda não possui dados na nuvem.");
+    const upload = !cloud || (useCloud === "auto" && hasUserData(local) && !hasUserData(cloud.data));
+    const selected = upload ? local : cloud!.data;
+    validateReferences(selected);
+    if (upload && !await remote.write(cloud?.revision ?? 0, selected)) continue;
+    await database.transaction("rw", tables(database), async () => {
+      const current = await database.syncState.get("connection");
+      if (current) {
+        if (current.userId === userId && current.workspaceId === remote.workspaceId) return;
+        throw new Error("A conta mudou em outra aba. Recarregue o aplicativo.");
+      }
+      if (stable(await readSyncData(database)) !== stable(local)) {
+        throw new Error("Os dados deste aparelho mudaram durante a preparação. Tente novamente; eles foram preservados.");
+      }
+      await applySyncData(database, selected);
+      await database.syncState.put({
+        key: "connection", userId, workspaceId: remote.workspaceId,
+        revision: (cloud?.revision ?? 0) + (upload ? 1 : 0), base: selected,
+      });
+    });
+    return "connected";
+  }
+  throw new Error("Não foi possível preparar seus dados agora. Tente novamente; os dados deste aparelho foram preservados.");
 }
 
 export async function syncOnce(
