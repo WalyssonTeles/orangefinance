@@ -3,3 +3,6 @@ dist
 dev-dist
 *.log
 *.tsbuildinfo
+.env
+.env.*
+!.env.example

@@ -3,8 +3,7 @@
 Gestão financeira pessoal da família Orange (irmão do **Orange Notes**).
 Aplicativo web progressivo (PWA): funciona no navegador do computador e pode ser instalado no Android, no iPhone e no Windows — tudo **offline e salvo localmente**.
 
-> Fase 1: sem servidor nem sincronização. Os dados ficam no IndexedDB do navegador.
-> O modelo de dados já foi preparado para a sincronização futura (veja “Pronto para sincronizar”).
+> Os dados ficam no IndexedDB do navegador. Opcionalmente, entre com Google para sincronizar entre dispositivos usando Supabase. O banco financeiro nunca é salvo no GitHub.
 
 ## Como abrir
 
@@ -66,16 +65,72 @@ Após o cache inicial, o app pode abrir offline, sem depender do computador que 
 
 ### Usar em diferentes dispositivos
 
-O mesmo link funciona em celulares, tablets e computadores, mas **não há login nem sincronização automática**. Os dados continuam locais em cada navegador, mesmo usando a mesma conta do GitHub.
+O mesmo link funciona em celulares, tablets e computadores. Em **Ajustes → Conta e sincronização → Entrar com Google**, use a mesma conta Google em cada aparelho. O Supabase precisa estar configurado conforme a seção abaixo; a conta do GitHub não autentica o acesso aos dados financeiros.
 
-Para transferir seus dados:
+- **Primeiro aparelho:** exporte uma cópia de segurança e escolha **Ativar pessoal com dados deste aparelho**.
+- **Demais aparelhos:** exporte os dados locais existentes antes de escolher **Usar dados pessoais da nuvem**. Isso substitui a cópia local, sem criar contas e categorias duplicadas.
+- A sincronização envia alterações locais após uma breve espera e consulta a nuvem a cada **15 segundos** enquanto o app está visível, além de retomar ao reconectar ou reabrir.
+- Offline, as alterações ficam no IndexedDB e são reconciliadas ao retornar. O navegador pode suspender o app fechado; não há execução contínua em segundo plano.
+- Alterações em registros diferentes são mescladas. Se o mesmo registro mudar de formas diferentes em dois aparelhos, o envio pausa e **Ajustes** permite comparar as versões e escolher qual manter para os registros em conflito. Horários dos dispositivos não são usados para decidir quem vence.
+- Nome exibido no espaço, contas, categorias, lançamentos e orçamentos são sincronizados. A preferência de ocultar valores permanece local.
+- Importar backup e apagar os dados também são alterações sincronizáveis; essas ações afetam a nuvem e os outros aparelhos depois de sincronizar.
+- Ao sair, os dados locais pendentes são preservados e a interface fica bloqueada até entrar na mesma conta. Para outra conta, use outro perfil do navegador. Esse bloqueio não criptografa o IndexedDB; proteja o aparelho e o perfil com bloqueio de tela.
+
+Sem sincronização configurada, o modo local continua disponível. Para transferir manualmente:
 
 1. No dispositivo de origem, abra **Ajustes → Backup → Exportar backup**.
 2. Transfira o arquivo JSON por um meio seguro para o outro aparelho.
 3. No destino, abra o app e use **Ajustes → Backup → Importar**.
 4. Confira a confirmação antes de substituir os dados existentes. A importação **não mescla** lançamentos de dispositivos diferentes.
 
-Exporte também um backup antes de trocar de navegador, limpar os dados do site ou migrar de `localhost` para o endereço publicado. O arquivo contém informações financeiras e não deve ser publicado no GitHub. A sincronização automática com autenticação e backend permanece uma etapa futura.
+Exporte também um backup antes de trocar de navegador, limpar os dados do site ou migrar de `localhost` para o endereço publicado. O arquivo contém informações financeiras e não deve ser publicado no GitHub.
+
+### Finanças pessoais e familiares
+
+Cada e-mail possui um espaço **Pessoal**, que não pode receber convidados. Em **Ajustes → Espaço financeiro**, crie um espaço familiar separado, por exemplo “Nossa família”. O espaço novo começa com categorias e uma conta inicial, **sem copiar as finanças pessoais**.
+
+Para compartilhar com sua esposa:
+
+1. Entre no espaço familiar, informe o e-mail dela em **E-mail de quem deseja convidar** e gere o convite.
+2. Copie o código e envie por um meio privado. O convite não é enviado automaticamente por e-mail.
+3. Ela entra com a própria conta Google (usando o e-mail indicado no convite). Após vincular o espaço pessoal dela, cola o **código de convite familiar** em Ajustes. Esse código de convite não é um código de login.
+4. Os dois passam a ver e editar o mesmo espaço familiar. Cada um mantém seu espaço Pessoal privado e pode alternar pelo seletor.
+
+O convite só funciona para o e-mail confirmado indicado, expira em sete dias e só pode ser aceito uma vez. Somente o responsável cria/cancela convites ou remove participantes. Participantes podem sair, mas o responsável não pode sair do próprio espaço. Todos os membros podem alterar e apagar dados financeiros **do espaço compartilhado**.
+
+A troca de espaços guarda alterações pendentes em caches separados; elas serão enviadas quando você voltar ao espaço correspondente e houver internet. O backup exportado contém apenas o espaço ativo. Não importe um backup pessoal dentro do espaço familiar sem querer compartilhar aquele conteúdo.
+
+Revogar um acesso bloqueia novas leituras e escritas no servidor; a lista de espaços é revalidada enquanto há internet. **Não apaga cópias locais, backups ou capturas que a pessoa já tenha obtido.** O funcionamento offline implica manter uma cópia no aparelho. Em computadores compartilhados, use perfis separados de navegador para contas de pessoas diferentes.
+
+### Configurar o Supabase
+
+Este projeto é **Vite/React**, não Next.js. Não usa `@supabase/ssr`, middleware, cookies de servidor nem variáveis `NEXT_PUBLIC_*`.
+
+1. No Supabase, mantenha **Data API** habilitada, desative **Automatically expose new tables** e ative **automatic RLS**.
+2. No **SQL Editor**, execute em ordem [a migração inicial](./supabase/migrations/202610150001_finance_sync.sql) e [a migração de espaços pessoais/familiares](./supabase/migrations/202610150002_workspaces.sql). A segunda cria os espaços, participações e convites, com uma linha financeira JSON por espaço, revisão atômica e limite de 5 MB. Dados da tabela inicial são copiados para o espaço pessoal do proprietário na primeira conexão. Leituras exigem autenticação e RLS; as funções conferem a identidade/participação no servidor. A migração inicial sozinha não basta para esta versão.
+3. Opcionalmente, execute [os testes SQL de usuários](./supabase/tests/rls.sql) e [os testes de espaços/convites](./supabase/tests/workspaces.sql) no SQL Editor. Eles validam isolamento, revisão concorrente, convite por e-mail, revogação e bloqueio anônimo. Criam registros de teste dentro de transações revertidas ao final. O resultado esperado é `PASS`. Os mesmos scripts são executados automaticamente nos testes unitários em PostgreSQL local via PGlite, sem usar contas ou dados reais.
+4. Configure o provedor **Google** conforme a seção abaixo. O login usa OAuth/PKCE e não depende de SMTP ou da edição dos modelos de e-mail. Mantenha novos cadastros habilitados para permitir o primeiro acesso de cada pessoa.
+5. Copie `.env.example` para `.env.local` e preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`. Reinicie o servidor local após alterar variáveis.
+6. Para o GitHub Pages, crie as mesmas duas **Repository variables** em **Settings → Secrets and variables → Actions → Variables** e execute novamente a publicação. A configuração de ambiente é incorporada durante o build; o arquivo `.env.local` não é enviado ao GitHub.
+
+Somente a URL e a chave **publishable** podem ser incorporadas no navegador. Nunca use senha do banco, chave secreta, `service_role` ou token administrativo em variáveis `VITE_*`. A chave pública não é uma autorização para ler os dados: as políticas do banco são obrigatórias. Não remova a RLS nem conceda acesso a `anon` para contornar erros.
+
+Sem as variáveis, o app avisa que a sincronização não foi configurada; erros de configuração, autenticação, dados inválidos e conflitos aparecem na interface, sem retornar sucesso fictício. Mantenha backups independentes. Ao excluir um usuário no Supabase Auth, **todos os espaços dos quais ele é responsável são excluídos por cascata**, inclusive os familiares. Exporte e confira backups de cada espaço antes de qualquer exclusão administrativa.
+
+### Configurar Entrar com Google
+
+1. No [Google Auth Platform](https://console.cloud.google.com/auth/overview), selecione/crie um projeto e configure o nome do app, e-mail de suporte e público externo. Se o aplicativo estiver em teste e a tela de público oferecer usuários de teste, adicione os e-mails autorizados (por exemplo, você e sua esposa).
+2. Em **Data Access / Scopes**, solicite apenas `openid`, `userinfo.email` e `userinfo.profile`. Não solicite acesso ao Gmail, contatos ou Drive.
+3. Em **Clients → Create client**, escolha **Web application**.
+   - **Authorized JavaScript origins:** `https://walyssonteles.github.io`. Para desenvolvimento local, adicione `http://localhost:5180`. Essas origens não incluem `/orangefinance/`.
+   - **Authorized redirect URIs:** `https://dtmphquwyczhqsplovzr.supabase.co/auth/v1/callback`. Se usar outro projeto, copie a URL indicada no provedor Google do Supabase.
+4. No [provedor Google do Supabase](https://supabase.com/dashboard/project/dtmphquwyczhqsplovzr/auth/providers?provider=Google), habilite o provedor e preencha o **Client ID** e o **Client Secret** gerados no Google. O segredo fica **somente nesse painel**, nunca no app, GitHub ou variáveis `VITE_*`. Preserve as verificações padrão de nonce/e-mail; não as desative para contornar erros.
+5. Em [Authentication → URL Configuration](https://supabase.com/dashboard/project/dtmphquwyczhqsplovzr/auth/url-configuration):
+   - **Site URL:** `https://walyssonteles.github.io/orangefinance/`.
+   - **Redirect URLs:** autorize exatamente `https://walyssonteles.github.io/orangefinance/` e, se necessário para testes, `http://localhost:5180/`. Evite curingas amplos em produção.
+6. No app, abra Ajustes e toque em **Entrar com Google**. O retorno é processado antes de iniciar a interface, troca o código por sessão usando PKCE e remove os parâmetros de autenticação da barra de endereço. Finalize no mesmo navegador/perfil em que iniciou o login. Se o navegador interno de outro app bloquear o Google, abra o Orange Finance diretamente no Chrome, Safari ou Edge.
+
+O app não recebe a senha do Google. A sessão é mantida no navegador para retomar a sincronização, inclusive entre aberturas. Em aplicativos instalados, o navegador pode tratar o retorno de forma diferente: se o login retornar em outra janela, conclua o acesso no navegador e abra/instale o app a partir dele. Não compartilhe URLs de retorno de autenticação.
 
 ## Tecnologias
 
@@ -84,6 +139,7 @@ Exporte também um backup antes de trocar de navegador, limpar os dados do site 
 | Interface | React 19 + TypeScript | Mesma base do Orange Notes; reaproveitável em Expo/Capacitor no futuro |
 | Estilo | Tailwind CSS 4 | Tokens de cor e tipografia da identidade Orange |
 | Banco local | IndexedDB via Dexie 4 | Rápido, transacional, reativo (`useLiveQuery`) |
+| Sincronização | Supabase Auth + PostgreSQL/RLS | Login com Google, espaços pessoais/familiares e revisão atômica |
 | PWA | vite-plugin-pwa (Workbox) | Instalável e funcionando offline |
 | Ícones | lucide-react | Traço consistente e leve |
 | Fontes | Bricolage Grotesque + Figtree (embutidas) | Identidade compartilhada com o Orange Notes, sem depender da internet |
@@ -107,9 +163,9 @@ src/
 public/favicon.svg        logo (laranja com gomos formando um gráfico de pizza)
 ```
 
-## Pronto para sincronizar
+## Modelo de sincronização
 
-Toda tabela segue regras que facilitam a fase com Firebase/Supabase:
+Toda tabela financeira segue estas regras:
 
 - **IDs UUID** gerados no aparelho (sem conflito entre dispositivos);
 - **valores em centavos** (inteiros), nunca números com vírgula;

@@ -1,6 +1,7 @@
 import { db, type Account, type Budget, type Category, type FinanceDB, type Transaction } from "./db";
 import { addMonths } from "./dates";
 import { splitInstallments } from "./finance";
+import { backupSchema } from "./backup-schema";
 
 type Draft<T> = Omit<T, "id" | "createdAt" | "updatedAt" | "deletedAt"> & { id?: string };
 
@@ -32,14 +33,22 @@ export const DEFAULT_CATEGORIES: Array<Pick<Category, "name" | "kind" | "icon" |
 ];
 
 /** Creates the starter categories and account on the very first run. */
+export function defaultRecords() {
+  const now = stamp();
+  return {
+    categories: DEFAULT_CATEGORIES.map((c, i) => fresh<Category>(c, now + i)),
+    accounts: [
+      fresh<Account>({ name: "Conta principal", type: "checking", color: "#FF8A1F", initialBalance: 0, creditLimit: null }, now),
+    ],
+  };
+}
+
 export async function seedDefaults(database: FinanceDB = db): Promise<void> {
   await database.transaction("rw", database.categories, database.accounts, database.settings, async () => {
     if (await database.settings.get("seeded")) return;
-    const now = stamp();
-    await database.categories.bulkAdd(DEFAULT_CATEGORIES.map((c, i) => fresh<Category>(c, now + i)));
-    await database.accounts.add(
-      fresh<Account>({ name: "Conta principal", type: "checking", color: "#FF8A1F", initialBalance: 0, creditLimit: null }, now),
-    );
+    const initial = defaultRecords();
+    await database.categories.bulkAdd(initial.categories);
+    await database.accounts.bulkAdd(initial.accounts);
     await database.settings.put({ key: "seeded", value: true });
   });
 }
@@ -230,7 +239,9 @@ export function parseBackup(text: string): Backup {
   for (const key of ["accounts", "categories", "transactions", "budgets", "settings"] as const) {
     if (!Array.isArray(backup[key])) throw new Error(`O backup está incompleto: faltam os dados de "${key}".`);
   }
-  return backup as Backup;
+  const parsed = backupSchema.safeParse(data);
+  if (!parsed.success) throw new Error("O backup contém registros inválidos ou valores incompatíveis.");
+  return parsed.data;
 }
 
 /** Replaces every local record with the backup content. */

@@ -1,4 +1,6 @@
 import Dexie, { type EntityTable } from "dexie";
+import type { SyncData } from "./sync-data";
+import type { Workspace } from "./workspaces";
 
 export type TxType = "expense" | "income" | "transfer";
 export type CategoryKind = "expense" | "income";
@@ -54,12 +56,33 @@ export interface Setting {
   value: unknown;
 }
 
+export interface SyncConnection {
+  key: "connection";
+  userId: string;
+  workspaceId: string;
+  revision: number;
+  base: SyncData;
+}
+
+export interface WorkspaceCache {
+  id: string;
+  connection: SyncConnection;
+  data: SyncData;
+}
+export interface WorkspaceCatalog {
+  userId: string;
+  spaces: Workspace[];
+}
+
 export class FinanceDB extends Dexie {
   accounts!: EntityTable<Account, "id">;
   categories!: EntityTable<Category, "id">;
   transactions!: EntityTable<Transaction, "id">;
   budgets!: EntityTable<Budget, "id">;
   settings!: EntityTable<Setting, "key">;
+  syncState!: EntityTable<SyncConnection, "key">;
+  workspaceCache!: EntityTable<WorkspaceCache, "id">;
+  workspaceCatalog!: EntityTable<WorkspaceCatalog, "userId">;
 
   constructor(name = "orange-finance") {
     super(name);
@@ -70,6 +93,8 @@ export class FinanceDB extends Dexie {
       budgets: "id, categoryId, updatedAt",
       settings: "key",
     });
+    this.version(2).stores({ syncState: "key" });
+    this.version(3).stores({ workspaceCache: "id", workspaceCatalog: "userId" });
   }
 }
 

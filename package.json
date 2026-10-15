@@ -12,6 +12,8 @@
     "icons": "pwa-assets-generator"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.0.0",
+    "zod": "^4.0.0",
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
     "@fontsource-variable/figtree": "^5.3.0",
     "dexie": "^4.4.6",
@@ -21,6 +23,8 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.0",
+    "@types/node": "^22.0.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

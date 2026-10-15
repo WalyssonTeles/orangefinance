@@ -3,11 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { CategoryForm } from "../components/forms";
 import { categoryIcon, ColorIcon } from "../components/icons";
 import { Logo } from "../components/Logo";
+import { SyncPanel } from "../components/SyncPanel";
 import { Button, Card, CardHeader, Field, inputClass, PageHeader, Segmented, Switch } from "../components/ui";
 import type { Category, CategoryKind } from "../lib/db";
-import { todayISO } from "../lib/dates";
+import { downloadBackup } from "../lib/download-backup";
 import { useSetting } from "../lib/hooks";
-import { exportBackup, importBackup, parseBackup, setSetting, wipeAll } from "../lib/repo";
+import { importBackup, parseBackup, setSetting, wipeAll } from "../lib/repo";
 import { useApp } from "../state";
 
 export function Settings() {
@@ -30,15 +31,12 @@ export function Settings() {
   };
 
   const download = async () => {
-    const backup = await exportBackup();
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `orange-finance-backup-${todayISO()}.json`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    notify("Backup exportado.");
+    try {
+      await downloadBackup();
+      notify("Backup exportado.");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Não foi possível exportar o backup.");
+    }
   };
 
   const restore = async (file: File) => {
@@ -57,12 +55,13 @@ export function Settings() {
   return (
     <div className="space-y-4">
       <PageHeader title="Ajustes" />
+      <SyncPanel />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Perfil e privacidade" />
+          <CardHeader title="Preferências deste espaço" />
           <div className="space-y-4">
-            <Field label="Como quer ser chamado?">
+            <Field label="Nome exibido neste espaço">
               <input
                 className={inputClass}
                 value={name}
@@ -80,9 +79,9 @@ export function Settings() {
         <Card>
           <CardHeader title="Backup" />
           <p className="mb-4 text-sm text-muted">
-            Os dados ficam salvos apenas neste navegador, sem sincronização automática. Para transferir para outro
-            aparelho, exporte o backup aqui e importe o arquivo no outro dispositivo. A importação substitui os dados
-            de destino; não combina os lançamentos. Guarde o arquivo em um local seguro, pois contém seus dados financeiros.
+            Mantenha uma cópia de segurança mesmo com sincronização. Sem conta vinculada, os dados ficam apenas neste
+            navegador. A importação substitui os dados atuais e, com sincronização ativa, essa substituição também será
+            enviada aos outros aparelhos. Guarde o arquivo em local seguro: ele contém seus dados financeiros.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={download}>
@@ -106,7 +105,7 @@ export function Settings() {
           {confirmImport && (
             <div role="alert" className="mt-4 rounded-xl bg-orange-soft p-3 text-sm">
               <p className="font-semibold">Importar “{confirmImport.name}”?</p>
-              <p className="mt-1 text-muted">Todos os dados atuais serão substituídos pelos dados do backup.</p>
+              <p className="mt-1 text-muted">Todos os dados atuais serão substituídos. Com sincronização ativa, a substituição também será enviada à nuvem e aos outros aparelhos.</p>
               <div className="mt-3 flex gap-2">
                 <Button className="h-9" onClick={() => restore(confirmImport)}>
                   Substituir dados
@@ -158,7 +157,7 @@ export function Settings() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader title="Apagar dados" />
-          <p className="mb-4 text-sm text-muted">Remove contas, lançamentos, orçamentos e categorias personalizadas deste dispositivo.</p>
+          <p className="mb-4 text-sm text-muted">Remove contas, lançamentos, orçamentos e categorias personalizadas. Com sincronização ativa, a exclusão também será enviada à nuvem e aos outros aparelhos. Exporte um backup antes.</p>
           {confirmWipe ? (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-semibold text-negative">Tem certeza? Esta ação não pode ser desfeita.</span>
