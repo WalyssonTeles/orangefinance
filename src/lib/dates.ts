@@ -13,6 +13,10 @@ export function parseISODate(iso: string): Date {
   return new Date(y, m - 1, d);
 }
 
+export function isISODate(iso: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) && toISODate(parseISODate(iso)) === iso;
+}
+
 /** "2026-10-15" → "2026-10" */
 export function monthOf(iso: string): string {
   return iso.slice(0, 7);
@@ -25,6 +29,17 @@ export function currentMonth(): string {
 export function yearPage(year: number, currentYear = new Date().getFullYear()): number[] {
   const end = currentYear + Math.ceil((year - currentYear) / 12) * 12;
   return Array.from({ length: 12 }, (_, index) => end - 11 + index);
+}
+
+export function calendarDays(month: string): (string | null)[] {
+  const first = `${month}-01`;
+  if (!isISODate(first)) throw new Error("Informe um mês válido para o calendário.");
+  const offset = parseISODate(first).getDay();
+  const count = Number(lastDayOfMonth(month).slice(-2));
+  return Array.from({ length: Math.ceil((offset + count) / 7) * 7 }, (_, index) => {
+    const date = addDays(first, index - offset);
+    return isISODate(date) ? date : null;
+  });
 }
 
 export function shiftMonth(month: string, delta: number): string {

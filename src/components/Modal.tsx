@@ -9,10 +9,11 @@ interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  wide?: boolean;
 }
 
 /** Bottom sheet on phones, centered dialog on wider screens. */
-export function Modal({ open, title, onClose, children, footer }: ModalProps) {
+export function Modal({ open, title, onClose, children, footer, wide = false }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -52,7 +53,7 @@ export function Modal({ open, title, onClose, children, footer }: ModalProps) {
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="sheet-in relative flex max-h-[92dvh] w-full flex-col rounded-t-3xl bg-surface outline-none sm:max-w-lg sm:rounded-3xl"
+        className={`sheet-in relative flex max-h-[92dvh] w-full flex-col rounded-t-3xl bg-surface outline-none sm:rounded-3xl ${wide ? "sm:max-w-[96vw]" : "sm:max-w-lg"}`}
       >
         <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-2">
           <h2 className="font-display text-xl font-bold tracking-tight">{title}</h2>

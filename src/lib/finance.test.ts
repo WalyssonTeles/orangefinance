@@ -4,6 +4,7 @@ import { addMonths, lastDayOfMonth, shiftMonth } from "./dates";
 import {
   accountBalances,
   budgetProgress,
+  descriptionSuggestions,
   monthlyHistory,
   monthSummary,
   splitInstallments,
@@ -126,5 +127,28 @@ describe("finance", () => {
   it("splits installments without losing cents", () => {
     expect(splitInstallments(100_00, 3)).toEqual([3334, 3333, 3333]);
     expect(splitInstallments(100_00, 3).reduce((a, b) => a + b)).toBe(100_00);
+  });
+});
+
+describe("description suggestions", () => {
+  it("matches a substring in both draft and saved descriptions without completing the input", () => {
+    const query = "Thal";
+    expect(descriptionSuggestions(query, ["Limpeza Thaline", "Pagamento Thales", "Mercado"])).toEqual(["Limpeza Thaline", "Pagamento Thales"]);
+    expect(query).toBe("Thal");
+  });
+
+  it("ignores accents and case, trims and deduplicates equivalent descriptions", () => {
+    expect(descriptionSuggestions("cafe", [" Café da manhã ", "cafe da manha", "CAFÉ da tarde"])).toEqual(["Café da manhã", "CAFÉ da tarde"]);
+  });
+
+  it("does not suggest empty queries, exact matches or unrelated descriptions", () => {
+    expect(descriptionSuggestions("  ", ["Limpeza Thaline"])).toEqual([]);
+    expect(descriptionSuggestions("Thale", ["Limpeza Thaline"])).toEqual([]);
+    expect(descriptionSuggestions("limpeza thaline", ["Limpeza Thaline"])).toEqual([]);
+  });
+
+  it("keeps more than four matching descriptions available for internal scrolling", () => {
+    const descriptions = Array.from({ length: 10 }, (_, index) => `Limpeza ${index}`);
+    expect(descriptionSuggestions("limp", descriptions)).toEqual(descriptions);
   });
 });

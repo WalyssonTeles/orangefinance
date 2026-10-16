@@ -36,7 +36,7 @@ export function supabaseRemote(client: SupabaseClient, workspaceId: string, acce
       if (new TextEncoder().encode(JSON.stringify(data)).length > 5_000_000) {
         throw new Error("Os dados excedem o limite de 5 MB por conta. Exporte um backup antes de continuar.");
       }
-      const { data: written, error } = await client.rpc("write_workspace_finance_v2", {
+      const { data: written, error } = await client.rpc("write_workspace_finance_v3", {
         p_workspace: workspaceId, p_expected_revision: expectedRevision, p_data: data,
       }).setHeader("Authorization", `Bearer ${accessToken}`);
       if (error) throw new Error(`Não foi possível salvar na nuvem: ${error.message}`);

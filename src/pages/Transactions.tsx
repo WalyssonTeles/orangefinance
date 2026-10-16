@@ -1,6 +1,8 @@
-import { Search, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowDownUp, ArrowUp, Search, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Money } from "../components/Money";
+import { Select } from "../components/Select";
 import { TransactionRow } from "../components/TransactionRow";
 import { Card, EmptyState, Field, inputClass, MonthPicker, PageHeader } from "../components/ui";
 import type { Transaction, TxType } from "../lib/db";
@@ -30,10 +32,15 @@ function matchesFilter(t: Transaction, filter: Filter): boolean {
 
 export function Transactions() {
   const { data, month, setMonth, sharedSpace, members, memberById } = useApp();
-  const { params } = useLocation();
+  const { params, section } = useLocation();
+  const listRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [ascending, setAscending] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilterState] = useState<Filter>(() => filterFromParam(params.get("tipo")));
-  const [accountId, setAccountId] = useState("");
+  const [accountId, setAccountId] = useState(() => params.get("conta") ?? "");
   const [categoryId, setCategoryId] = useState(() => params.get("categoria") ?? "");
   const [holderId, setHolderId] = useState(() => params.get("titular") ?? "");
 
@@ -41,13 +48,38 @@ export function Transactions() {
     setFilterState(filterFromParam(params.get("tipo")));
     setCategoryId(params.get("categoria") ?? "");
     setHolderId(params.get("titular") ?? "");
+    setAccountId(params.get("conta") ?? "");
   }, [params]);
 
-  const updateUrl = (type: Filter, holder: string, category: string) => {
-    replaceParams("lancamentos", null, {
+  useEffect(() => {
+    const update = () => setShowBackToTop(window.scrollY > 0);
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    return () => window.removeEventListener("scroll", update);
+  }, []);
+
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const measure = () => listRef.current?.style.setProperty("--transactions-header-height", `${header.getBoundingClientRect().height}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (section !== "lista") return;
+    const frame = requestAnimationFrame(() => listRef.current?.scrollIntoView({ block: "start", behavior: "instant" }));
+    return () => cancelAnimationFrame(frame);
+  }, [section, params]);
+
+  const updateUrl = (type: Filter, holder: string, category: string, account = accountId) => {
+    replaceParams("lancamentos", section, {
       ...(type !== "all" ? { tipo: type } : {}),
       ...(holder ? { titular: holder } : {}),
       ...(category ? { categoria: category } : {}),
+      ...(account ? { conta: account } : {}),
     });
   };
 
@@ -89,18 +121,20 @@ export function Transactions() {
         (!categoryId || (categoryId === "__none__" ? !t.categoryId : t.categoryId === categoryId)) &&
         matchesSearch(t, query, data.categoryById),
     );
-    return groupByDate(visible);
-  }, [personTx, filter, accountId, categoryId, query, data.categoryById]);
+    return groupByDate(visible, ascending);
+  }, [personTx, filter, accountId, categoryId, query, data.categoryById, ascending]);
 
   const filtered = query || filter !== "all" || accountId || categoryId || holderId;
 
   return (
     <div>
-      <PageHeader
-        title="Lançamentos"
-        actionsClassName="w-full sm:w-80"
-        actions={<MonthPicker month={month} onChange={setMonth} className="w-full" />}
-      />
+      <div ref={headerRef} className="sticky top-14 z-20 -mx-4 mb-5 border-b border-line bg-cream px-4 py-3 [&>header]:mb-0 sm:-mx-6 sm:px-6 lg:static lg:z-auto lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0">
+        <PageHeader
+          title="Lançamentos"
+          actionsClassName="w-full sm:w-80"
+          actions={<MonthPicker month={month} onChange={setMonth} className="w-full" />}
+        />
+      </div>
 
       <div className="mb-4 overflow-hidden rounded-2xl border border-line bg-surface min-[400px]:grid min-[400px]:grid-cols-3 min-[400px]:gap-2 min-[400px]:overflow-visible min-[400px]:border-0 min-[400px]:bg-transparent sm:gap-3">
         {[
@@ -119,7 +153,11 @@ export function Transactions() {
       </div>
 
       <Card className="p-3 sm:p-4">
-        <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <button type="button" aria-expanded={expanded} aria-controls="transaction-filters" onClick={() => setExpanded((previous) => !previous)} className="text-sm font-semibold text-brand-ink hover:underline">{expanded ? "Ocultar filtros" : "Exibir Filtros"}{filtered ? " · ativos" : ""}</button>
+          <button type="button" aria-label={ascending ? "Ordenar do mais recente para o mais antigo" : "Ordenar do mais antigo para o mais recente"} title={ascending ? "Mais antigos primeiro" : "Mais recentes primeiro"} aria-pressed={ascending} onClick={() => setAscending((previous) => !previous)} className="flex h-10 items-center gap-2 rounded-xl px-3 text-sm text-muted hover:bg-cream"><ArrowDownUp size={18} /><span className="hidden sm:inline">{ascending ? "Mais antigos" : "Mais recentes"}</span></button>
+        </div>
+        <div id="transaction-filters" hidden={!expanded} className="mt-3 space-y-3">
           <Field label="Buscar Lançamentos">
             <div className="relative">
             <Search size={18} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted" />
@@ -175,25 +213,17 @@ export function Transactions() {
           )}
           <div className="grid gap-2 sm:grid-cols-2">
             <Field label="Contas e Cartões">
-            <select className={inputClass} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-              <option value="">Todas as contas</option>
-              {data.accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}{sharedSpace && a.holderId ? ` · ${memberById.get(a.holderId)?.name ?? "Ex-participante"}` : ""}
-                </option>
-              ))}
-            </select>
+            <Select label="Contas e Cartões" value={accountId} onChange={(value) => { setAccountId(value); updateUrl(filter, holderId, categoryId, value); }} options={[
+              { value: "", label: "Todas as contas" },
+              ...data.accounts.map((a) => ({ value: a.id, label: `${a.name}${sharedSpace && a.holderId ? ` · ${memberById.get(a.holderId)?.name ?? "Ex-participante"}` : ""}` })),
+            ]} />
             </Field>
             <Field label="Categoria">
-            <select className={inputClass} value={categoryId} onChange={(e) => selectCategory(e.target.value)}>
-              <option value="">{availableCategories.length ? "Todas as categorias" : "Nenhuma categoria nesta lista"}</option>
-              {(hasUncategorized || categoryId === "__none__") && <option value="__none__">Sem categoria</option>}
-              {availableCategories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}{filter === "all" || filter === "pending" ? ` (${c.kind === "income" ? "receita" : "despesa"})` : ""}
-                </option>
-              ))}
-            </select>
+            <Select label="Categoria" value={categoryId} onChange={selectCategory} options={[
+              { value: "", label: availableCategories.length ? "Todas as categorias" : "Nenhuma categoria nesta lista" },
+              ...(hasUncategorized || categoryId === "__none__" ? [{ value: "__none__", label: "Sem categoria" }] : []),
+              ...availableCategories.map((c) => ({ value: c.id, label: `${c.name}${filter === "all" || filter === "pending" ? ` (${c.kind === "income" ? "receita" : "despesa"})` : ""}` })),
+            ]} />
             </Field>
           </div>
           {filtered && (
@@ -205,7 +235,7 @@ export function Transactions() {
                 setAccountId("");
                 setCategoryId("");
                 setHolderId("");
-                updateUrl("all", "", "");
+                updateUrl("all", "", "", "");
               }}
               className="inline-flex items-center gap-1 text-sm font-semibold text-brand-ink hover:underline"
             >
@@ -213,8 +243,10 @@ export function Transactions() {
             </button>
           )}
         </div>
-
-        <div className="mt-3 border-t border-line pt-1">
+      </Card>
+      <div ref={listRef} className="mt-4 scroll-mt-[calc(var(--transactions-header-height,0px)+5rem)] lg:scroll-mt-5" tabIndex={-1} role="region" aria-label="Lista de lançamentos">
+      <Card className="p-3 sm:p-4">
+        <div className="pt-1">
           {groups.length === 0 ? (
             <EmptyState
               title={filtered ? "Nada encontrado" : "Nenhum lançamento"}
@@ -234,6 +266,19 @@ export function Transactions() {
           )}
         </div>
       </Card>
+      </div>
+      {showBackToTop && createPortal(
+        <button
+          type="button"
+          aria-label="Voltar ao topo"
+          title="Voltar ao topo"
+          onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" })}
+          className="fixed right-6 bottom-6 z-40 hidden size-12 place-items-center rounded-full bg-brand text-white shadow-lg transition-colors hover:bg-brand-hover lg:grid"
+        >
+          <ArrowUp size={22} />
+        </button>,
+        document.body,
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo } from "react";
 import { db, type Account, type Budget, type Category, type MemberSummary, type Transaction } from "./db";
 import { alive } from "./finance";
+import { effectiveTransactions } from "./invoices";
 import { readProfile, type Profile } from "./profile";
 
 const EMPTY: never[] = [];
@@ -24,13 +25,13 @@ export function useFinanceData(): FinanceData {
   const budgets = useLiveQuery(() => db.budgets.toArray().then(alive));
 
   return useMemo(() => {
-    const sortedAccounts = [...(accounts ?? EMPTY)].sort((a, b) => a.createdAt - b.createdAt);
+    const sortedAccounts = [...(accounts ?? EMPTY)].sort((a, b) => (a.position ?? a.createdAt) - (b.position ?? b.createdAt) || a.id.localeCompare(b.id));
     const sortedCategories = [...(categories ?? EMPTY)].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
     return {
       ready: accounts !== undefined && categories !== undefined && transactions !== undefined && budgets !== undefined,
       accounts: sortedAccounts,
       categories: sortedCategories,
-      transactions: transactions ?? EMPTY,
+      transactions: effectiveTransactions(transactions ?? EMPTY),
       budgets: budgets ?? EMPTY,
       accountById: new Map(sortedAccounts.map((a) => [a.id, a])),
       categoryById: new Map(sortedCategories.map((c) => [c.id, c])),

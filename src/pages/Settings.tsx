@@ -3,16 +3,18 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { CategoryForm } from "../components/forms";
 import { categoryIcon, ColorIcon } from "../components/icons";
 import { Logo } from "../components/Logo";
 import { SharedSpaces } from "../components/SharedSpaces";
 import { SyncPanel } from "../components/SyncPanel";
-import { Button, Card, CardHeader, Field, inputClass, Segmented, Switch } from "../components/ui";
-import type { Category, CategoryKind } from "../lib/db";
+import { Button, Card, CardHeader, DatePicker, Field, inputClass, Segmented, Switch } from "../components/ui";
+import { db, type Category, type CategoryKind } from "../lib/db";
 import { downloadBackup } from "../lib/download-backup";
 import { useProfile, useSetting } from "../lib/hooks";
 import { GENDER_OPTIONS, type Gender } from "../lib/profile";
+import { Select } from "../components/Select";
 import { importBackup, parseBackup, setSetting, wipeAll } from "../lib/repo";
 import { navigate, useLocation } from "../lib/router";
 import { useApp } from "../state";
@@ -138,16 +140,13 @@ function ProfileSection() {
           <input className={inputClass} value={name} maxLength={40} autoComplete="name" placeholder="Seu nome" onChange={(e) => setName(e.target.value)} />
         </Field>
         <Field label="Sexo">
-          <select className={inputClass} value={gender} onChange={(e) => setGender(e.target.value as Gender | "")}>
-            {GENDER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <Select label="Sexo" value={gender} options={GENDER_OPTIONS} onChange={(value) => {
+            const option = GENDER_OPTIONS.find((item) => item.value === value);
+            if (option) setGender(option.value);
+          }} />
         </Field>
         <Field label="Data de nascimento">
-          <input type="date" className={inputClass} value={birthDate} min="1900-01-01" max={maxDate} onChange={(e) => setBirthDate(e.target.value)} />
+          <DatePicker label="Data de nascimento" value={birthDate} min="1900-01-01" max={maxDate} onChange={setBirthDate} />
         </Field>
         <p className="text-xs text-muted">
           Sexo e data de nascimento são opcionais e ficam visíveis apenas para você.
@@ -217,6 +216,7 @@ function CategoriesSection() {
 
 function BackupSection() {
   const { notify } = useApp();
+  const previous = useLiveQuery(() => db.releaseBackups.get("pre-1.2"));
   const [confirmWipe, setConfirmWipe] = useState(false);
   const [confirmImport, setConfirmImport] = useState<File | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -268,6 +268,10 @@ function BackupSection() {
             }}
           />
         </div>
+        {previous && <div className="mt-4 rounded-xl bg-cream p-3 text-sm text-muted">
+          <p>Há uma cópia local do espaço que estava aberto antes da atualização para 1.2. Ela pode ser de um espaço diferente do atual. Exportar não altera seus dados.</p>
+          <button type="button" className="mt-2 font-semibold text-brand-ink hover:underline" onClick={() => void downloadBackup(true).catch((error: unknown) => notify(error instanceof Error ? error.message : "Não foi possível exportar a cópia."))}>Exportar cópia anterior à 1.2</button>
+        </div>}
         {confirmImport && (
           <div role="alert" className="mt-4 rounded-xl bg-orange-soft p-3 text-sm">
             <p className="font-semibold">Importar “{confirmImport.name}”?</p>

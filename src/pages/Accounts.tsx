@@ -8,9 +8,12 @@ import type { Account } from "../lib/db";
 import { lastDayOfMonth } from "../lib/dates";
 import { accountBalances, budgetStatus, isCredit, totalBalance } from "../lib/finance";
 import { useApp } from "../state";
+import { reorderAccounts } from "../lib/repo";
+import { InvoiceList } from "../components/InvoiceList";
+import { SortableAccounts } from "../components/SortableAccounts";
 
 export function Accounts() {
-  const { data, month, openTransaction, sharedSpace, memberById } = useApp();
+  const { data, month, openTransaction, sharedSpace, memberById, notify } = useApp();
   const holderName = (account: Account) => account.holderId ? memberById.get(account.holderId)?.name ?? "Ex-participante" : "Sem titular";
   const [editing, setEditing] = useState<Account | "new" | null>(null);
 
@@ -23,6 +26,13 @@ export function Accounts() {
 
   const money = data.accounts.filter((a) => !isCredit(a));
   const cards = data.accounts.filter(isCredit);
+  const saveOrder = async (ids: string[]) => {
+    const group = new Set(ids);
+    let index = 0;
+    const ordered = data.accounts.map((account) => group.has(account.id) ? ids[index++] : account.id);
+    try { await reorderAccounts(ordered); }
+    catch (error) { notify(error instanceof Error ? error.message : "Não foi possível salvar a ordem das contas."); }
+  };
 
   return (
     <div>
@@ -42,14 +52,14 @@ export function Accounts() {
           <Money fit cents={total} className="font-display text-3xl font-bold" />
         </div>
         <div className="min-w-0 rounded-2xl border border-line bg-surface px-5 py-4">
-          <p className="text-sm font-semibold text-muted">Faturas de cartão</p>
+          <p className="text-sm font-semibold text-muted">Saldo devedor em cartões</p>
           <Money fit cents={Math.max(0, owed)} className="font-display text-3xl font-bold" />
         </div>
       </div>
 
       <h2 className="mb-3 font-display text-lg font-semibold">Contas</h2>
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {money.map((account) => {
+      <p className="mb-3 text-xs text-muted">Segure um card para arrastar. Pelo teclado, use o botão de reordenar, Espaço e as setas.</p>
+      <SortableAccounts accounts={money} onReorder={saveOrder} className="mb-6" render={(account) => {
           const { icon, label } = ACCOUNT_TYPES[account.type];
           const current = balances.get(account.id) ?? 0;
           const expected = forecast.get(account.id) ?? 0;
@@ -73,8 +83,7 @@ export function Accounts() {
               </Card>
             </button>
           );
-        })}
-      </div>
+        }} />
 
       <div className="mb-3 flex items-center justify-between">
         <h2 className="font-display text-lg font-semibold">Cartões de crédito</h2>
@@ -90,9 +99,9 @@ export function Accounts() {
           </p>
         </Card>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {cards.map((card) => {
+        <SortableAccounts accounts={cards} onReorder={saveOrder} render={(card) => {
             const invoice = Math.max(0, -(balances.get(card.id) ?? 0));
+            const legacyOwed = Math.max(0, -(accountBalances([card], data.transactions.filter((tx) => !tx.invoiceKey && !tx.invoicePaymentKey)).get(card.id) ?? 0));
             const limit = card.creditLimit ?? 0;
             const ratio = limit ? invoice / limit : 0;
             return (
@@ -105,7 +114,7 @@ export function Accounts() {
                     {sharedSpace && <p className="truncate text-sm text-muted">Titular: {holderName(card)}</p>}
                   </div>
                 </button>
-                <p className="mt-4 text-sm text-muted">Fatura atual</p>
+                <p className="mt-4 text-sm text-muted">Saldo devedor total</p>
                 <Money fit cents={invoice} className="font-display text-2xl font-bold" />
                 {limit > 0 && (
                   <div className="mt-3 space-y-1.5">
@@ -115,18 +124,19 @@ export function Accounts() {
                     </p>
                   </div>
                 )}
-                <Button
+                {!card.closingDay || !card.dueDay ? <button type="button" onClick={() => setEditing(card)} className="mt-3 text-left text-sm font-semibold text-brand-ink hover:underline">Configurar fechamento e vencimento</button>
+                  : <p className="mt-3 text-xs text-muted">Fecha dia {card.closingDay} · vence dia {card.dueDay}</p>}
+                <InvoiceList account={card} />
+                {legacyOwed > 0 && <Button
                   variant="secondary"
                   className="mt-4 w-full"
-                  disabled={invoice === 0}
-                  onClick={() => openTransaction({ type: "transfer", toAccountId: card.id, amount: invoice })}
+                  onClick={() => openTransaction({ type: "transfer", toAccountId: card.id, amount: legacyOwed })}
                 >
-                  Pagar fatura
-                </Button>
+                  Pagar saldo anterior à 1.2
+                </Button>}
               </Card>
             );
-          })}
-        </div>
+          }} />
       )}
 
       {editing && <AccountForm account={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} />}

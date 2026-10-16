@@ -20,7 +20,7 @@ import {
 import { useProfile } from "../lib/hooks";
 import { loadDemoData } from "../lib/demo";
 import { setPaid } from "../lib/repo";
-import { navigate } from "../lib/router";
+import { navigate, navigateToTransactions } from "../lib/router";
 import { useApp } from "../state";
 import { useSync } from "../sync-context";
 import { SpaceSwitcher } from "../components/SpaceSwitcher";
@@ -37,7 +37,7 @@ export function Dashboard() {
   const { session } = useSync();
   const { name } = useProfile(session?.user.id ?? null);
   const { accounts, transactions, categoryById, budgets } = data;
-  const openList = (tipo?: "income" | "expense") => navigate("lancamentos", null, tipo ? { tipo } : undefined);
+  const openList = (tipo?: "income" | "expense") => navigateToTransactions(tipo ? { tipo } : {});
 
   const stats = useMemo(() => {
     const balances = accountBalances(accounts, transactions);
@@ -152,7 +152,7 @@ export function Dashboard() {
               <li key={person.id || "none"} className="min-w-0 rounded-xl border border-line bg-cream/40 p-2">
                 <button
                   type="button"
-                  onClick={() => navigate("lancamentos", null, { titular: person.id || "__none__" })}
+                  onClick={() => navigateToTransactions({ titular: person.id || "__none__" })}
                   className="min-h-11 w-full rounded-lg px-2 text-left font-semibold hover:bg-orange-soft"
                   aria-label={`Ver lançamentos de ${person.name}`}
                 >{person.name}</button>
@@ -165,7 +165,7 @@ export function Dashboard() {
                     key={row.label}
                     type="button"
                     aria-label={`Ver ${row.label.toLowerCase()} de ${person.name}`}
-                    onClick={() => navigate("lancamentos", null, { titular: person.id || "__none__", ...(row.type ? { tipo: row.type } : {}) })}
+                    onClick={() => navigateToTransactions({ titular: person.id || "__none__", ...(row.type ? { tipo: row.type } : {}) })}
                     className={`flex min-h-12 w-full flex-wrap items-center justify-between gap-x-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-orange-soft ${row.type ? "" : "border-t border-dashed border-line font-bold"}`}
                   >
                     <span>{row.label}</span>
@@ -191,8 +191,10 @@ export function Dashboard() {
                 <Button
                   variant="ghost"
                   onClick={async () => {
+                    try {
                     await loadDemoData();
                     notify("Dados de exemplo carregados. Apague-os em Ajustes quando quiser começar.");
+                    } catch (error) { notify(error instanceof Error ? error.message : "Não foi possível carregar os dados de exemplo."); }
                   }}
                 >
                   Explorar com dados de exemplo
@@ -224,7 +226,7 @@ export function Dashboard() {
                     <li key={c.categoryId ?? "none"}>
                       <button
                         type="button"
-                        onClick={() => navigate("lancamentos", null, { tipo: "expense", categoria: c.categoryId ?? "__none__" })}
+                        onClick={() => navigateToTransactions({ tipo: "expense", categoria: c.categoryId ?? "__none__" })}
                         className="flex min-h-12 w-full items-center gap-2.5 rounded-xl px-1 text-left transition-colors hover:bg-orange-soft"
                         aria-label={`Ver despesas de ${category?.name ?? "Sem categoria"}`}
                       >
@@ -259,8 +261,9 @@ export function Dashboard() {
             <ul className="divide-y divide-line">
               {stats.bills.map((bill) => {
                 const category = bill.categoryId ? categoryById.get(bill.categoryId) : undefined;
-                const overdue = bill.date < todayISO();
-                const dueToday = bill.date === todayISO();
+                const dueDate = bill.invoiceDueDate ?? bill.date;
+                const overdue = dueDate < todayISO();
+                const dueToday = dueDate === todayISO();
                 return (
                   <li key={bill.id} className="flex items-center gap-3 py-2.5">
                     <button
@@ -272,18 +275,21 @@ export function Dashboard() {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold">{bill.description || category?.name}</span>
                         <span className={`text-xs font-semibold ${overdue ? "text-negative" : dueToday ? "text-brand-ink" : "text-muted"}`}>
-                          {overdue ? `Atrasada · ${shortDate(bill.date)}` : dueToday ? "Vence hoje" : `Vence ${shortDate(bill.date)}`}
+                          {overdue ? `Atrasada · ${shortDate(dueDate)}` : dueToday ? "Vence hoje" : `Vence ${shortDate(dueDate)}`}
                         </span>
                       </span>
                       <Money cents={bill.amount} className="text-sm font-semibold" />
                     </button>
                     <button
                       type="button"
-                      title="Marcar como pago"
-                      aria-label={`Marcar ${bill.description || category?.name} como pago`}
+                      title={bill.invoiceKey ? "Pagar fatura em Contas" : "Marcar como pago"}
+                      aria-label={bill.invoiceKey ? `Pagar fatura de ${bill.description || category?.name}` : `Marcar ${bill.description || category?.name} como pago`}
                       onClick={async () => {
+                        if (bill.invoiceKey) { navigate("contas"); notify("Abra as faturas do cartão para registrar o pagamento."); return; }
+                        try {
                         await setPaid(bill.id, true);
-                        notify("Marcado como pago.", { label: "Desfazer", run: () => void setPaid(bill.id, false) });
+                        notify("Marcado como pago.", { label: "Desfazer", run: () => void setPaid(bill.id, false).catch((error: unknown) => notify(error instanceof Error ? error.message : "Não foi possível desfazer.")) });
+                        } catch (error) { notify(error instanceof Error ? error.message : "Não foi possível atualizar o pagamento."); }
                       }}
                       className="grid size-8 place-items-center rounded-full border-2 border-line text-transparent transition-colors hover:border-positive hover:text-positive"
                     >
@@ -373,16 +379,18 @@ export function Dashboard() {
           <CardHeader title="Cartões de crédito" />
           <ul className="grid gap-3 sm:grid-cols-2">
             {stats.cards.map(({ account, owed }) => (
-              <li key={account.id} className="flex items-center gap-3 rounded-xl bg-cream px-3 py-3 [&>div]:min-w-0">
+              <li key={account.id} className="relative flex items-center gap-3 rounded-xl bg-cream px-3 py-3 [&>div]:min-w-0">
+                <button type="button" aria-label={`Ver lançamentos de ${account.name}`} onClick={() => navigateToTransactions({ conta: account.id })} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left after:absolute after:inset-0 after:rounded-xl hover:text-brand-ink">
                 <ColorIcon icon={CreditCard} color={account.color} />
-                <div className="min-w-0 flex-1">
+                <span className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{account.name}</p>
                   <p className="text-sm text-muted">
-                    Fatura: <Money cents={Math.max(0, owed)} className="font-semibold text-ink" />
+                    Saldo devedor: <Money cents={Math.max(0, owed)} className="font-semibold text-ink" />
                   </p>
-                </div>
+                </span>
+                </button>
                 {owed > 0 && (
-                  <Button variant="secondary" className="h-9 px-3 text-sm" onClick={() => openTransaction({ type: "transfer", toAccountId: account.id, amount: owed })}>
+                  <Button variant="secondary" className="relative z-10 h-9 px-3 text-sm" onClick={() => navigate("contas")}>
                     Pagar
                   </Button>
                 )}
@@ -396,7 +404,7 @@ export function Dashboard() {
         <CardHeader
           title="Últimos lançamentos"
           action={
-            <button type="button" onClick={() => navigate("lancamentos")} className="text-sm font-semibold text-brand-ink hover:underline">
+            <button type="button" onClick={() => navigateToTransactions()} className="text-sm font-semibold text-brand-ink hover:underline">
               Ver todos
             </button>
           }

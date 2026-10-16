@@ -2,6 +2,7 @@ import { ArrowLeftRight, Eye, EyeOff, House, Landmark, Plus, Settings as Setting
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { Logo, Wordmark } from "./components/Logo";
 import { TransactionForm } from "./components/TransactionForm";
+import { BatchTransactions } from "./components/BatchTransactions";
 import { IconButton } from "./components/ui";
 import { currentMonth } from "./lib/dates";
 import { useFinanceData, useMembers, useSetting } from "./lib/hooks";
@@ -37,6 +38,7 @@ export default function App() {
   const [month, setMonth] = useState(currentMonth);
   const [hidden, setHidden] = useState(false);
   const [request, setRequest] = useState<TransactionRequest | null>(null);
+  const [batchOpen, setBatchOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const appliedHidePreference = useRef(false);
 
@@ -106,6 +108,13 @@ export default function App() {
             className="mt-7 flex h-12 items-center justify-center gap-2 rounded-xl bg-brand font-semibold text-white transition-colors hover:bg-brand-hover"
           >
             <Plus size={20} strokeWidth={2.5} /> Novo lançamento
+          </button>
+          <button
+            type="button"
+            onClick={() => setBatchOpen(true)}
+            className="mt-2 w-full rounded-lg px-3 py-2 text-center text-sm font-semibold text-brand-ink hover:underline"
+          >
+            Adicionar em lote
           </button>
           <nav className="mt-5 space-y-1" aria-label="Principal">
             {NAV.map(({ route: r, label, icon: Icon }) => {
@@ -189,6 +198,7 @@ export default function App() {
         </nav>
 
         {request && <TransactionForm key={request.id ?? "new"} request={request} onClose={() => setRequest(null)} />}
+        {batchOpen && <BatchTransactions onClose={() => setBatchOpen(false)} />}
 
         {toast && (
           <div

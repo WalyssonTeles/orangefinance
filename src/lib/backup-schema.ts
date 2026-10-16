@@ -13,7 +13,7 @@ const syncFields = {
 // Records keep unknown fields so data written by newer app versions survives older parsers.
 export const backupSchema = z.object({
   app: z.literal("orange-finance"),
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
   exportedAt: z.string(),
   accounts: z.array(z.looseObject({
     ...syncFields,
@@ -23,6 +23,9 @@ export const backupSchema = z.object({
     initialBalance: integer,
     creditLimit: integer.nullable(),
     holderId: id.nullable().default(null),
+    position: integer.nonnegative().optional(),
+    closingDay: integer.min(1).max(31).nullable().optional(),
+    dueDay: integer.min(1).max(31).nullable().optional(),
   })),
   categories: z.array(z.looseObject({
     ...syncFields,
@@ -47,6 +50,13 @@ export const backupSchema = z.object({
     installments: integer.positive().nullable(),
     /** User who owns the entry in a shared space; null for personal spaces and entries created before 1.0. */
     holderId: id.nullable().default(null),
+    repeatMode: z.enum(["none", "installments", "recurring"]).optional(),
+    frequency: z.enum(["daily", "weekly", "fortnightly", "monthly", "yearly", "custom"]).optional(),
+    intervalDays: integer.min(1).max(3650).optional(),
+    repeatCount: integer.min(1).max(1200).optional(),
+    invoiceKey: id.nullable().optional(),
+    invoiceDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    invoicePaymentKey: id.nullable().optional(),
   })),
   budgets: z.array(z.looseObject({
     ...syncFields,

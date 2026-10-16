@@ -2,6 +2,8 @@ import { ArrowLeftRight, Check, Clock, Trash2 } from "lucide-react";
 import { useEffect, useId, useRef, useState, type PointerEvent } from "react";
 import type { Transaction } from "../lib/db";
 import { todayISO } from "../lib/dates";
+import { FREQUENCIES } from "../lib/recurrence";
+import { navigate } from "../lib/router";
 import { deleteTransaction, restoreTransactions, setPaid, type SeriesScope } from "../lib/repo";
 import { useApp } from "../state";
 import { categoryIcon, ColorIcon } from "./icons";
@@ -25,7 +27,7 @@ export function TransactionRow({ tx, showDate }: { tx: Transaction; showDate?: s
   const account = data.accountById.get(tx.accountId);
   const target = tx.toAccountId ? data.accountById.get(tx.toAccountId) : undefined;
   const isTransfer = tx.type === "transfer";
-  const overdue = !tx.paid && tx.date < todayISO();
+  const overdue = !tx.paid && (tx.invoiceDueDate ?? tx.date) < todayISO();
   const open = offset !== 0;
 
   const holder = sharedSpace && tx.holderId ? memberById.get(tx.holderId)?.name ?? "Ex-participante" : null;
@@ -33,7 +35,7 @@ export function TransactionRow({ tx, showDate }: { tx: Transaction; showDate?: s
   const details = isTransfer
     ? `${account?.name ?? "Conta removida"} → ${target?.name ?? "Conta removida"}`
     : [holder, category?.name ?? "Sem categoria", account?.name].filter(Boolean).join(" · ");
-  const series = tx.installments ? `${tx.installment}/${tx.installments}` : tx.groupId ? "Mensal" : null;
+  const series = tx.installments ? `${tx.installment}/${tx.installments}` : tx.groupId ? FREQUENCIES.find((item) => item.value === (tx.frequency ?? "monthly"))?.label : null;
   const statusLabel = tx.paid ? (tx.type === "income" ? "Recebido" : isTransfer ? "Feita" : "Pago") : overdue ? "Atrasado" : "Pendente";
   const toggleLabel = tx.paid ? "Marcar como pendente" : tx.type === "income" ? "Marcar como recebido" : "Marcar como pago";
 
@@ -52,22 +54,31 @@ export function TransactionRow({ tx, showDate }: { tx: Transaction; showDate?: s
 
   const togglePaid = async () => {
     moveTo(0);
+    if (tx.invoiceKey || tx.invoicePaymentKey) {
+      notify("O status é controlado pela fatura. Abra o cartão em Contas.");
+      navigate("contas");
+      return;
+    }
     const next = !tx.paid;
+    try {
     await setPaid(tx.id, next);
     notify(next ? (tx.type === "income" ? "Marcado como recebido." : "Marcado como pago.") : "Marcado como pendente.", {
       label: "Desfazer",
-      run: () => void setPaid(tx.id, !next),
+      run: () => void setPaid(tx.id, !next).catch((error: unknown) => notify(error instanceof Error ? error.message : "Não foi possível desfazer.")),
     });
+    } catch (error) { notify(error instanceof Error ? error.message : "Não foi possível atualizar o status."); }
   };
 
   const remove = async (scope: SeriesScope) => {
     setConfirmDelete(false);
     moveTo(0);
+    try {
     const ids = await deleteTransaction(tx.id, scope);
     notify(ids.length > 1 ? `${ids.length} lançamentos excluídos.` : "Lançamento excluído.", {
       label: "Desfazer",
-      run: () => void restoreTransactions(ids),
+      run: () => void restoreTransactions(ids).catch((error: unknown) => notify(error instanceof Error ? error.message : "Não foi possível restaurar.")),
     });
+    } catch (error) { notify(error instanceof Error ? error.message : "Não foi possível excluir."); }
   };
 
   const requestDelete = () => (tx.groupId ? setConfirmDelete(true) : void remove("one"));
@@ -111,6 +122,7 @@ export function TransactionRow({ tx, showDate }: { tx: Transaction; showDate?: s
   const onRowClick = () => {
     if (Date.now() - swipedAt.current < 350) return;
     if (open) return moveTo(0);
+    if (tx.invoicePaymentKey) { navigate("contas"); return; }
     openTransaction({ id: tx.id });
   };
 

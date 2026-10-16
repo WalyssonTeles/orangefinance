@@ -23,6 +23,9 @@ export interface Account extends SyncRecord {
   creditLimit: number | null;
   /** Optional owner in shared spaces; absent on accounts created before 1.1. */
   holderId?: string | null;
+  position?: number;
+  closingDay?: number | null;
+  dueDay?: number | null;
 }
 
 export interface Category extends SyncRecord {
@@ -48,6 +51,13 @@ export interface Transaction extends SyncRecord {
   installments: number | null;
   /** Shared spaces: user who owns the entry. Absent/null for personal entries and data created before 1.0. */
   holderId?: string | null;
+  repeatMode?: "none" | "installments" | "recurring";
+  frequency?: "daily" | "weekly" | "fortnightly" | "monthly" | "yearly" | "custom";
+  intervalDays?: number;
+  repeatCount?: number;
+  invoiceKey?: string | null;
+  invoiceDueDate?: string | null;
+  invoicePaymentKey?: string | null;
 }
 
 export interface Budget extends SyncRecord {
@@ -97,6 +107,7 @@ export class FinanceDB extends Dexie {
   workspaceCache!: EntityTable<WorkspaceCache, "id">;
   workspaceCatalog!: EntityTable<WorkspaceCatalog, "userId">;
   workspaceMembers!: EntityTable<WorkspaceMembersCache, "workspaceId">;
+  releaseBackups!: EntityTable<{ version: string; data: unknown }, "version">;
 
   constructor(name = "orange-finance") {
     super(name);
@@ -110,6 +121,13 @@ export class FinanceDB extends Dexie {
     this.version(2).stores({ syncState: "key" });
     this.version(3).stores({ workspaceCache: "id", workspaceCatalog: "userId" });
     this.version(4).stores({ workspaceMembers: "workspaceId" });
+    this.version(5).stores({ releaseBackups: "version" }).upgrade(async (tx) => {
+      const data: Record<string, unknown> = {};
+      for (const table of ["accounts", "categories", "transactions", "budgets", "settings", "workspaceCache"]) {
+        data[table] = await tx.table(table).toArray();
+      }
+      await tx.table("releaseBackups").put({ version: "pre-1.2", data });
+    });
   }
 }
 

@@ -132,4 +132,49 @@ describe("Supabase PostgreSQL permissions", () => {
       rollback;
     `);
   }, 20_000);
+
+  it("upgrades to 1.2 without changing snapshots and blocks old writers only after new semantics are used", async () => {
+    const snapshot = async () => (await postgres.query("select * from public.workspace_finance order by workspace_id")).rows;
+    const before = await snapshot();
+    await postgres.exec(sql("migrations", "202610160003_v1_2.sql"));
+    await postgres.exec(sql("migrations", "202610160003_v1_2.sql"));
+    expect(await snapshot()).toEqual(before);
+    await postgres.exec(`
+      begin;
+      set local role authenticated;
+      select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-0000000000a1', true);
+      do $test$
+      declare snapshot jsonb; rev bigint; space uuid := '00000000-0000-4000-8000-0000000000b1';
+      begin
+        select data, revision into snapshot, rev from public.workspace_finance where workspace_id = space;
+        if not public.write_workspace_finance_v2(space, rev, snapshot) then raise exception 'Legacy writer failed'; end if;
+        rev := rev + 1;
+        snapshot := jsonb_set(snapshot, '{accounts}', '[{"id":"a","position":0,"closingDay":20,"dueDay":28}]');
+        if not public.write_workspace_finance_v3(space, rev, snapshot) then raise exception '1.2 writer failed'; end if;
+        if public.write_workspace_finance_v3(space, rev, snapshot) then raise exception 'Stale revision accepted'; end if;
+        begin
+          perform public.write_workspace_finance_v2(space, rev + 1, snapshot);
+          raise exception 'Outdated writer accepted';
+        exception when invalid_parameter_value then
+          if sqlerrm not like '%Atualize%' then raise; end if;
+        end;
+      end $test$;
+      select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-00000000ffff', true);
+      do $test$ begin
+        begin
+          perform public.write_workspace_finance_v3('00000000-0000-4000-8000-0000000000b1', 0, '{}');
+          raise exception 'Nonmember accepted';
+        exception when insufficient_privilege then null; end;
+      end $test$;
+      set local role anon;
+      do $test$ begin
+        begin
+          perform public.write_workspace_finance_v3('00000000-0000-4000-8000-0000000000b1', 0, '{}');
+          raise exception 'Anonymous accepted';
+        exception when insufficient_privilege then null; end;
+      end $test$;
+      rollback;
+    `);
+    expect(await snapshot()).toEqual(before);
+  }, 20_000);
 });

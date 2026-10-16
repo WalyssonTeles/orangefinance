@@ -1,9 +1,22 @@
 # Orange Finance — Funcionalidades do app
 
-> **Versão 1.1.0**
+> **Versão 1.2.0**
 > Este arquivo descreve o que o app **já faz hoje**.
 > No final há um espaço para você escrever as funcionalidades que deseja nas próximas versões.
-> As versões anteriores estão salvas no GitHub nas tags `v0.1.0` e `v1.0.0`.
+> As versões anteriores são preservadas nas tags `v0.1.0`, `v1.0.0` e `v1.1.0`.
+
+---
+
+## Versão 1.2 — novidades
+
+- Atalhos da inicial levam diretamente ao card da lista, já filtrado, inclusive os cartões de crédito.
+- Filtro inicialmente recolhido com “Exibir Filtros” / “Ocultar filtros”, separado do card de lançamentos, e botão de ordenação nas duas direções.
+- Contas e cartões reordenáveis por arraste fluido, mouse, toque prolongado e teclado. A ordem acompanha os seletores e a sincronização.
+- Faturas por ciclo, fechamento e vencimento; compras no fechamento vão para a próxima. Pagamento único por transferência controla o status de todas as compras, sem outra despesa.
+- Recorrências diária, semanal, quinzenal (14 dias), mensal, anual e personalizada; quantidade de ocorrências inclui a primeira. É possível mudar um lançamento único para parcelado/recorrente depois de criado.
+- Lote desktop (a partir de 1.024 px), com tabela, validação integral, sucesso inline e desfazer com recuperação das linhas.
+- Sugestões de descrições anteriores em dropdown, sem autocompletar.
+- Migração preserva os dados e uma cópia local anterior à 1.2, exportável em Ajustes → Backup.
 
 ---
 
@@ -44,10 +57,10 @@ O Orange Finance é um app de gestão financeira pessoal, irmão do Orange Notes
   - O cartão é clicável: o **saldo** abre Lançamentos com tudo (entradas e saídas), **Receitas** abre só as receitas e **Despesas** só as despesas do mês.
 - **Por pessoa** (espaços compartilhados): comprovantes com nome, receitas, despesas e total do mês. Nome/total abrem Lançamentos pelo titular; receitas/despesas combinam os dois filtros. As linhas têm área de toque ampliada.
 - **Gastos por categoria**: gráfico de rosca com as 5 maiores categorias e as demais agrupadas; a lista mostra todas as categorias, com percentual e valor. Clicar numa linha abre as despesas daquela categoria no mês.
-- **Contas a pagar**: despesas pendentes até o fim do mês, com destaque para **atrasadas** e **vencendo hoje**. Um clique no círculo marca como pago (com opção **Desfazer**).
+- **Contas a pagar**: despesas pendentes até o fim do mês, com destaque para **atrasadas** e **vencendo hoje**. Compras vinculadas usam o vencimento da fatura; o círculo leva ao pagamento da fatura em Contas. Outras despesas podem ser marcadas individualmente, com **Desfazer**.
 - **Orçamentos**: os 4 orçamentos mais próximos do limite, com barra de progresso.
 - **Últimos 6 meses**: gráfico de barras de receitas × despesas. Clicar em um mês muda o mês selecionado.
-- **Cartões de crédito**: fatura atual de cada cartão e botão **Pagar**.
+- **Cartões de crédito**: saldo devedor total de cada cartão; clicar no card abre os lançamentos filtrados e rolados até a lista. O botão **Pagar** abre Contas para escolher a fatura.
 - **Últimos lançamentos**: os 5 mais recentes.
 - **Primeiro uso**: convite para criar o primeiro lançamento ou **explorar com dados de exemplo** (6 meses de dados fictícios para conhecer todas as telas).
 
@@ -60,13 +73,17 @@ O Orange Finance é um app de gestão financeira pessoal, irmão do Orange Notes
 - Três tipos: **Despesa**, **Receita** e **Transferência** entre contas.
 - **Campo de valor estilo app de banco**: os números entram pela direita (digitar `1`, `2`, `5`, `0` resulta em `12,50`). No celular, abre o teclado numérico.
 - Descrição (opcional), categoria com ícone e cor, conta ou cartão, data (com atalhos **Hoje** e **Ontem**) e observações.
-- Status **Pago / Recebido** ou **Pendente**.
-- **Repetição** (ao criar despesas e receitas):
-  - **Parcelada** — divide o valor total em 2 a 120 parcelas mensais, sem perder centavos, com o selo `2/10` em cada parcela;
-  - **Mensal** — repete o mesmo valor por N meses (ex.: aluguel, assinaturas).
+- Status **Pago / Recebido** ou **Pendente**. Em novas despesas de cartão, o status é controlado pela fatura e a data é a da compra.
+- Descrição com sugestões de despesas anteriores por trecho digitado, sem autocompletar; seleção por mouse, toque ou setas e Enter.
+- Calendário de data próprio, em português e com a mesma identidade visual da home, também usado no lote, pagamento de faturas e nascimento. Abre no mês atual; semanas **D S T Q Q S S**, de domingo a sábado. Setas navegam os meses; tocar no mês abre **JAN–DEZ**, tocar no ano abre páginas de 12 anos. No celular abre em tela cheia, como o seletor da home; **Hoje** seleciona a data atual e **Limpar** aparece apenas nos campos opcionais.
+- **Repetição** (ao criar ou editar despesas e receitas; até 1.200 ocorrências):
+  - **Única** — um lançamento;
+  - **Parcelada** — divide o valor total em parcelas mensais, sem perder centavos, com o selo `2/10` em cada parcela;
+  - **Recorrente** — repete o mesmo valor diariamente, semanalmente, quinzenalmente (a cada duas semanas), mensalmente, anualmente ou a cada N dias;
+  - **Quantidade de ocorrências** inclui o lançamento inicial. Prévia das datas antes de salvar.
   - Apenas o primeiro lançamento usa o status escolhido; os próximos ficam pendentes.
-- Validação com mensagens claras (valor zerado, categoria não escolhida, transferência para a mesma conta etc.).
-- **Editar séries**: ao salvar um lançamento parcelado ou mensal, escolha **Só este** ou **Este e os próximos**. Todos os dados mudam (valor, descrição, categoria, conta, observações, titular). Nos próximos, o status pago/pendente é mantido e uma nova data preserva a repetição mensal (ex.: dia 10 → dia 15 em todos os meses seguintes).
+- Validação com mensagens claras por toast, visíveis sobre o formulário sem rolar até o rodapé (valor zerado, categoria não escolhida, data/repetição inválida, transferência para a mesma conta etc.).
+- **Editar séries**: em alterações comuns, escolha **Só este** ou **Este e os próximos**. Nos próximos, o status é mantido e uma nova data preserva a frequência original. Mudar a repetição substitui este e os próximos, preservando o ID inicial e o histórico anterior; ocorrências futuras pagas bloqueiam essa substituição. Único pode virar parcelado ou recorrente sem recriar o lançamento manualmente.
 - **Titular** (espaços compartilhados): indica a quem pertence a receita ou despesa. Por padrão é quem lança, mas pode ser outro participante ou “Sem titular”.
 - O formulário mostra em qual espaço o lançamento será salvo.
 
@@ -78,16 +95,27 @@ O Orange Finance é um app de gestão financeira pessoal, irmão do Orange Notes
 ### Lista
 - Agrupada por dia (“Hoje”, “Ontem”, “Quinta-feira, 22 de outubro”…).
 - Resumo do mês: **Receitas**, **Despesas** e **Resultado**.
+- Lista em card próprio, sem título ou descrição de filtros redundantes; filtros separados e inicialmente recolhidos. O botão com setas alterna entre mais recentes e mais antigos.
+- No mobile, o título da tela e o seletor de mês ficam fixos abaixo da barra superior. No desktop, o cabeçalho rola normalmente e um botão flutuante com seta para cima aparece após rolar verticalmente; esse botão não aparece no mobile.
 - **Busca** por descrição, categoria ou observação (ignora acentos e maiúsculas).
 - Filtros por tipo (**Todos, Despesas, Receitas, Transferências, Pendentes**), por **conta** e por **categoria**, com botão **Limpar filtros**. O filtro de categoria lista **só as categorias presentes nos lançamentos da tela** (mês, tipo e pessoa escolhidos).
 - **Por pessoa** (espaços compartilhados): ver tudo junto ou apenas os lançamentos de um participante; o resumo do mês acompanha o filtro.
 - Labels visíveis: **Buscar Lançamentos**, **Tipo de Lançamento**, **Titular** (espaços compartilhados), **Contas e Cartões** e **Categoria**. Os atalhos do painel preenchem os filtros, que continuam combináveis.
 - Seletor de mês com largura total no celular e expandido no computador; sem botão “+ Novo” redundante. A criação continua pela barra inferior, menu lateral ou tecla N.
-- Cada item mostra ícone da categoria, titular (em espaços compartilhados), conta, selo de parcela/mensal, valor e etiqueta de status: **verde** quando pago/recebido e **vermelha** quando pendente ou atrasado.
+- Cada item mostra ícone da categoria, titular (em espaços compartilhados), conta, selo de parcela/frequência, valor e etiqueta de status: **verde** quando pago/recebido e **vermelha** quando pendente ou atrasado.
 - **O item inteiro é clicável** e abre o lançamento.
 - **Computador**: ao passar o mouse (ou navegar com Tab), aparecem os botões **relógio** (marcar pendente) ou **check** (marcar pago) e **lixeira** (excluir).
 - **Celular**: deslize o item para a esquerda para abrir a gaveta com **Pago/Pendente** e **Excluir**, como nos apps de e-mail. Tocar no item aberto fecha a gaveta.
 - Excluir pela lista pergunta **Só este / Este e os próximos** em séries; todas as ações oferecem **Desfazer**.
+
+### Lote (somente desktop)
+- **Adicionar em lote**, disponível a partir de 1.024 px como link abaixo de **Novo lançamento** na barra lateral, abre uma tabela com tipo, valor, descrição, categoria, conta/cartão, data contextual, repetição, quantidade, frequência, titular, status e observações. O link não fica no cabeçalho de Lançamentos.
+- Escolhas únicas usam selects; valor e textos permanecem livres. Todos os selects do aplicativo abrem abaixo do campo, com visual padronizado no desktop e no celular, até quatro opções visíveis e rolagem interna para listas maiores.
+- **Número de parcelas** tem coluna própria e fica desabilitado fora de **Parcelada**. Ocorrências/frequência são habilitadas para **Recorrente**. A coluna **Titular** só aparece em espaços compartilhados.
+- As sugestões de descrição incluem despesas anteriores e textos das outras linhas ainda não salvas, sem autocompletar.
+- O link **Adicionar em lote** é centralizado abaixo de **Novo lançamento**. **Fechar** fica ao lado de **Salvar lançamentos**, à direita; **Nova linha** fica à esquerda.
+- Botão **Nova linha**, remoção por linha, até 200 linhas e 5.000 lançamentos gerados. Se qualquer linha for inválida, nenhuma é salva.
+- Ao salvar, a tabela é limpa e aparece **Lançamentos realizados com sucesso** com **Desfazer lançamentos**, que recupera a tabela. A ação vale para o último lote enquanto a tela estiver aberta e é bloqueada se registros tiverem sido editados ou faturas pagas posteriormente.
 
 ---
 
@@ -98,12 +126,17 @@ O Orange Finance é um app de gestão financeira pessoal, irmão do Orange Notes
 - **Titular opcional** em contas e cartões de espaços compartilhados, exibido nos cartões e seletores de conta. Contas antigas continuam sem titular; definir o titular da conta não reatribui seus lançamentos.
 - Categorias têm ícones adicionais (beleza, salão, cuidados pessoais, educação, transporte, internet, doações etc.) com nomes em português. A paleta ganhou preto, vermelho, ciano e roxo.
 - Saldo atual e saldo **previsto no fim do mês** de cada conta.
-- Totais: **Saldo em contas** e **Faturas de cartão**.
+- Totais: **Saldo em contas** e **Saldo devedor em cartões**.
 - **Cartão de crédito**:
   - compras no cartão aumentam a fatura, sem reduzir o saldo das contas;
   - limite do cartão com barra de uso e **limite disponível**;
   - fatura em aberto inicial (para quem já tem compras antes de usar o app);
-  - botão **Pagar fatura**, que abre uma transferência já preenchida com o valor da fatura.
+  - dias de fechamento e vencimento configuráveis; compras no fechamento vão para o próximo ciclo e dias inexistentes usam o último dia do mês;
+  - **Faturas por vencimento** permite pagar uma fatura inteira escolhendo conta e data; uma transferência é a única fonte do status de pagamento das compras;
+  - **Reabrir fatura** desfaz o pagamento; alterações nas compras de uma fatura paga exigem reabri-la;
+  - alterar o fechamento não recalcula faturas já vinculadas. Relatórios continuam pela data da compra, e a dívida total não deve ser confundida com uma fatura;
+  - lançamentos anteriores à 1.2 conservam seus valores/status e não são redistribuídos automaticamente. Há pagamento separado do saldo anterior. Pagamentos parciais não estão incluídos.
+- Segure um card para arrastar: ele flutua, reserva espaço e os demais deslizam. A ordem é mantida por seção, persistida e usada nos seletores. Pelo teclado, use o botão de reordenar, Espaço, setas e Espaço; Esc cancela.
 - Uma conta com lançamentos não pode ser excluída. Isso evita perder histórico.
 
 ---

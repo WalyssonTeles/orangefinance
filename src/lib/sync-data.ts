@@ -2,6 +2,7 @@ import { z } from "zod";
 import { backupSchema } from "./backup-schema";
 import type { FinanceDB } from "./db";
 import { DEFAULT_ACCOUNT, DEFAULT_CATEGORIES } from "./repo";
+import { validateInvoices } from "./invoices";
 
 const schema = backupSchema.omit({ app: true, version: true, exportedAt: true, settings: true }).extend({
   settings: z.array(z.object({ key: z.literal("userName"), value: z.string() })).max(1),
@@ -117,6 +118,7 @@ export function mergeSyncData(base: SyncData, local: SyncData, remote: SyncData,
 }
 
 export function validateReferences(data: SyncData): void {
+  validateInvoices(data.accounts, data.transactions);
   const accounts = new Set(data.accounts.filter((a) => a.deletedAt === null).map((a) => a.id));
   const categories = new Set(data.categories.filter((c) => c.deletedAt === null).map((c) => c.id));
   if (data.transactions.some((t) => t.deletedAt === null && (

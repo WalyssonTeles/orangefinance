@@ -101,6 +101,30 @@ Nos espaços compartilhados, cada lançamento tem um **Titular** (por padrão, q
 
 Na versão **1.1**, contas e cartões também podem ter um titular, sem alterar a titularidade dos lançamentos. O resumo por pessoa funciona como um comprovante com atalhos para os filtros de Lançamentos; gastos por categoria também abrem a lista filtrada. O seletor de período permite escolher meses e páginas de 12 anos, com tela cheia no celular. Os filtros têm labels visíveis e Ajustes tem um único retorno por nível, com alvo de toque ampliado.
 
+### Versão 1.2
+
+- Atalhos do painel aplicam os filtros e rolam até o card dos lançamentos. Cartões também abrem sua lista filtrada.
+- Filtros separados da lista, inicialmente recolhidos, e ordenação por data nas duas direções. O card da lista não repete o título da página nem a descrição dos filtros. No mobile, título e seletor de mês permanecem fixos durante a rolagem; no desktop, um botão flutuante permite voltar ao topo após rolar verticalmente.
+- Campos obrigatórios e erros ao salvar/editar lançamentos são informados pelo toast global, visível sobre o formulário sem precisar rolar até o rodapé.
+- Contas e cartões podem ser reordenados por mouse, toque prolongado ou teclado (botão de arraste, Espaço, setas e Espaço para soltar; Esc cancela). A ordem é salva e sincronizada, inclusive nos seletores. Cada seção mantém sua própria ordem.
+- Recorrência diária, semanal, quinzenal (**14 dias**), mensal, anual ou por intervalo em dias. **Quantidade de ocorrências** inclui a primeira, com prévia das datas; limite de 1.200 ocorrências por série. Parcelas dividem o valor total sem perder centavos.
+- A repetição pode ser alterada em lançamentos existentes, inclusive de único para recorrente/parcelado. Alterar a regra substitui este e os próximos, preservando o ID original e o histórico anterior. Ocorrências futuras pagas impedem a substituição até serem reabertas. Edições comuns continuam oferecendo “Só este” ou “Este e os próximos”, preservando o status dos próximos.
+- Descrições sugerem termos já utilizados em despesas, por trecho e sem distinção de acentos/maiúsculas. No lote, incluem também as descrições das outras linhas ainda não salvas. Nenhum texto é preenchido sem escolha explícita.
+- Todos os selects usam o mesmo menu abaixo do campo, no desktop e no celular: até quatro opções visíveis e rolagem interna nas listas maiores, com navegação por teclado e Escape para fechar.
+- Os campos de data exibem **DD/MM/AAAA**, inclusive como indicação quando vazios, e usam um calendário próprio em português, com a identidade visual do seletor da home. Abre no mês atual, com semanas de domingo a sábado (**D S T Q Q S S**); o cabeçalho alterna entre dias, meses abreviados (**JAN–DEZ**) e páginas de 12 anos. As datas continuam salvas em ISO, com limites preservados para nascimento e seleção por teclado.
+- Lote em telas com largura a partir de **1.024 px**, pelo link **Adicionar em lote** abaixo de **Novo lançamento** na barra lateral: escolhas por selects, campos livres para valor/descrição/observações, data contextual por linha, parcelas e recorrências. Até 200 linhas / 5.000 lançamentos gerados; gravação atômica. A mensagem verde permite desfazer o último lote enquanto a tela estiver aberta, recuperando suas linhas. Se o lote foi editado ou uma fatura foi paga, a reversão é bloqueada para não apagar alterações posteriores.
+- Na tabela do lote, **Número de parcelas** tem coluna própria, habilitada apenas para **Parcelada**; ocorrências e frequência são habilitadas para **Recorrente**. **Titular** aparece somente em espaços compartilhados. **Fechar** fica junto de **Salvar lançamentos** no rodapé.
+
+**Faturas:** configure os dias de fechamento e vencimento em Contas. Compras no dia do fechamento entram no ciclo seguinte; dias inexistentes usam o último dia do mês. O vencimento é o primeiro dia configurado depois do fechamento. A data da compra continua determinando o mês dos relatórios; vencimento e pagamento são informações distintas.
+
+Cada compra guarda seu ciclo/vencimento, e alterar a configuração do cartão não recalcula o histórico. O status de compras novas deriva de uma única transferência de quitação da fatura, sem gerar outra despesa. Em **Contas → cartão → Faturas por vencimento**, escolha **Marcar fatura como paga** e a conta de origem; **Reabrir fatura** desfaz a transferência e deixa as compras pendentes. Compras de fatura paga não podem ser alteradas sem reabrir a fatura. Pagamentos parciais não fazem parte desta versão.
+
+**Histórico anterior:** compras e saldos antigos não são redistribuídos automaticamente entre faturas e conservam o status original. O saldo anterior pode ser pago separadamente. Alterar explicitamente a data, a conta ou a repetição de uma compra antiga passa a usar as novas regras. A tela informa essa diferença. O saldo devedor total inclui compromissos futuros; não é o valor de uma única fatura.
+
+**Preservação:** a migração IndexedDB 4 → 5 não altera registros financeiros e guarda uma cópia local anterior à 1.2 (incluindo os espaços em cache). Ajustes → Backup permite exportar o backup padrão do espaço que estava aberto antes da atualização; ele pode ser diferente do espaço atual. Essa cópia permanece apenas no navegador e é removida por “Apagar dados”. Backups antigos continuam importáveis. Exporte backups de cada espaço antes da atualização; a cópia local não protege contra limpeza/evicção do navegador.
+
+Backups novos usam o **formato 2**: a 1.2 importa os formatos 1 e 2, mas versões anteriores recusam o formato 2 em vez de interpretar faturas novas com regras antigas. A cópia pré-atualização permanece exportável no formato 1.
+
 O responsável pode alterar o **Nome do espaço** nos detalhes em **Ajustes → Espaço compartilhado**. O novo nome aparece na lista e no seletor de espaços, e nos outros aparelhos após a atualização da lista. Isso não altera o código, participantes nem dados financeiros.
 
 Quem tiver o código pode entrar no espaço, então trate-o como uma senha. O responsável pode **gerar um novo código** (o anterior para de funcionar) e remover participantes; há limite de 10 tentativas inválidas por hora por conta. Participantes podem sair, mas o responsável não pode sair do próprio espaço. Todos os membros podem alterar e apagar dados financeiros **do espaço compartilhado**. Sexo e data de nascimento do Perfil nunca são mostrados aos outros participantes.
@@ -121,6 +145,14 @@ Este projeto é **Vite/React**, não Next.js. Não usa `@supabase/ssr`, middlewa
 6. Para o GitHub Pages, crie as mesmas duas **Repository variables** em **Settings → Secrets and variables → Actions → Variables** e execute novamente a publicação. A configuração de ambiente é incorporada durante o build; o arquivo `.env.local` não é enviado ao GitHub.
 
 **Atualização 1.0 → 1.1:** antes de publicar o frontend 1.1, execute somente [a migração da 1.1](./supabase/migrations/202610160002_v1_1.sql) sobre o banco que já recebeu as anteriores. Ela adiciona a função `rename_finance_workspace`, restrita ao responsável de espaços compartilhados, e não altera snapshots, revisões, códigos ou participantes. É reaplicável e compatível com o frontend 1.0. Titulares de contas são campos opcionais no JSON existente; backups antigos continuam aceitos, sem alteração do banco IndexedDB ou reatribuição de lançamentos. Os testes verificam a preservação e a sincronização desses dados, incluindo bases de comparação anteriores à 1.1.
+
+**Atualização 1.1 → 1.2 — ordem obrigatória de publicação:**
+
+1. Preserve as tags anteriores (`v0.1.0`, `v1.0.0`, `v1.1.0`) e exporte backups financeiros de cada espaço. A tag local `v1.1.0-pre-1.2` preserva a base anterior ao desenvolvimento; tags não contêm os bancos dos usuários.
+2. No Supabase, execute [a migração da 1.2](./supabase/migrations/202610160003_v1_2.sql) **antes** de publicar o frontend. Ela adiciona `write_workspace_finance_v3`, sem reescrever snapshots ou revisões. É reaplicável. Não execute novamente migrações antigas depois desta, pois recriariam a função de gravação antiga sem sua proteção.
+3. Execute `npm test` e `npm run build:pages`; só então publique o código. O workflow de `main` publica automaticamente, portanto não envie a release para `main` antes da etapa anterior.
+4. Atualize os aparelhos/PWAs e confira saldos, espaços e um ciclo de fatura. A API anterior continua aceitando espaços legados; após usar campos da 1.2 naquele espaço, aparelhos antigos recebem uma mensagem para atualizar em vez de sobrescrever novas regras. Alterações locais são mantidas. Conflitos offline entre pagamento e compras da mesma fatura pausam a sincronização com orientação para reabrir e reconciliar, sem substituição silenciosa.
+5. Não faça downgrade direto do banco IndexedDB 5 para a 1.1: a versão antiga não abre o banco mais novo. Tags permitem recuperar o código, não desfazer dados. Para contingência, preserve o banco/backup, mantenha a migração SQL e publique uma correção compatível com o esquema 5; restaurar um backup antigo requer confirmação e também se propaga pela sincronização.
 
 Somente a URL e a chave **publishable** podem ser incorporadas no navegador. Nunca use senha do banco, chave secreta, `service_role` ou token administrativo em variáveis `VITE_*`. A chave pública não é uma autorização para ler os dados: as políticas do banco são obrigatórias. Não remova a RLS nem conceda acesso a `anon` para contornar erros.
 
@@ -176,7 +208,7 @@ public/favicon.svg        logo (laranja com gomos formando um gráfico de pizza)
 
 Toda tabela financeira segue estas regras:
 
-- **IDs UUID** gerados no aparelho (sem conflito entre dispositivos);
+- **IDs UUID** gerados no aparelho; pagamentos de faturas usam um ID determinístico por cartão/ciclo para impedir duas quitações independentes;
 - **valores em centavos** (inteiros), nunca números com vírgula;
 - **`createdAt` / `updatedAt`** em todo registro;
 - **exclusão lógica** (`deletedAt`) — a exclusão também poderá ser sincronizada.

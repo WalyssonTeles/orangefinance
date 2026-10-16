@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { addMonths, todayISO } from "./dates";
-import { createTransaction, saveAccount, saveBudget, type TransactionDraft } from "./repo";
+import { createTransaction, payInvoice, saveAccount, saveBudget, type TransactionDraft } from "./repo";
+import { cardInvoices } from "./invoices";
 
 /** Fills an empty database with ~6 months of realistic sample data so every screen can be explored. */
 export async function loadDemoData(): Promise<void> {
@@ -21,7 +22,7 @@ async function fill() {
     creditLimit: null,
   });
   const wallet = await saveAccount({ name: "Carteira", type: "wallet", color: "#2F9444", initialBalance: 180_00, creditLimit: null });
-  const card = await saveAccount({ name: "Cartão Laranja", type: "credit", color: "#7048E8", initialBalance: 0, creditLimit: 4000_00 });
+  const card = await saveAccount({ name: "Cartão Laranja", type: "credit", color: "#7048E8", initialBalance: 0, creditLimit: 4000_00, closingDay: 25, dueDay: 7 });
 
   const today = todayISO();
   const monthDay = (offset: number, day: number) => addMonths(`${today.slice(0, 8)}${String(day).padStart(2, "0")}`, offset);
@@ -39,11 +40,13 @@ async function fill() {
     await add({ type: "expense", amount: 175_00 + m * 4_00, description: "Conta de luz", date: monthDay(m, 22), accountId: bank, categoryId: cat("Contas da casa"), paid: past });
     await add({ type: "expense", amount: 119_90, description: "Internet", date: monthDay(m, 12), accountId: bank, categoryId: cat("Contas da casa"), paid: past });
     if (m > -3) await add({ type: "income", amount: 900_00, description: "Projeto freelance", date: monthDay(m, 20), accountId: bank, categoryId: cat("Freelance"), paid: due(20) });
-    if (past) await add({ type: "transfer", amount: 1050_00, description: "Pagamento da fatura", date: monthDay(m, 7), accountId: bank, toAccountId: card });
   }
   await add({ type: "expense", amount: 55_90, description: "Streaming", date: monthDay(-1, 15), accountId: card, categoryId: cat("Assinaturas"), paid: true }, { mode: "monthly", count: 12 });
   await add({ type: "expense", amount: 2399_00, description: "Notebook", date: monthDay(-1, 18), accountId: card, categoryId: cat("Compras") }, { mode: "installments", count: 10 });
   await add({ type: "expense", amount: 64_50, description: "Farmácia", date: today, accountId: wallet, categoryId: cat("Saúde") });
+  for (const invoice of cardInvoices(await db.transactions.toArray(), card)) {
+    if (invoice.dueDate < today) await payInvoice(invoice.key, bank, invoice.dueDate);
+  }
 
   for (const [name, amount] of [["Mercado", 800_00], ["Alimentação", 300_00], ["Transporte", 300_00], ["Compras", 400_00]] as const) {
     const categoryId = cat(name);

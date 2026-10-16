@@ -1,15 +1,16 @@
 import { Trash2 } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import type { TxType } from "../lib/db";
-import { addDays, todayISO } from "../lib/dates";
-import { isCredit, splitInstallments } from "../lib/finance";
-import { formatBRL } from "../lib/money";
+import { addDays, isISODate, todayISO } from "../lib/dates";
+import { isCredit } from "../lib/finance";
+import { cardCycle } from "../lib/invoices";
+import { transactionRepeat, validateRepeat, type Repeat } from "../lib/recurrence";
 import {
   createTransaction,
+  changeRecurrence,
   deleteTransaction,
   restoreTransactions,
   updateTransaction,
-  type RepeatMode,
   type SeriesScope,
   type TransactionDraft,
 } from "../lib/repo";
@@ -18,7 +19,10 @@ import { useSync } from "../sync-context";
 import { categoryIcon, ColorIcon } from "./icons";
 import { Modal } from "./Modal";
 import { MoneyInput } from "./MoneyInput";
-import { Button, Field, inputClass, Segmented, Switch } from "./ui";
+import { Select } from "./Select";
+import { Button, DatePicker, Field, inputClass, Segmented, Switch } from "./ui";
+import { DescriptionInput } from "./DescriptionInput";
+import { RecurrenceFields } from "./RecurrenceFields";
 
 const TYPE_OPTIONS: { value: TxType; label: string; activeClass: string }[] = [
   { value: "expense", label: "Despesa", activeClass: "bg-surface text-negative shadow-sm" },
@@ -45,13 +49,27 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
   const [date, setDate] = useState(existing?.date ?? todayISO());
   const [paid, setPaidState] = useState(existing?.paid ?? true);
   const [notes, setNotes] = useState(existing?.notes ?? "");
-  const [repeat, setRepeat] = useState<RepeatMode>("none");
-  const [countText, setCountText] = useState("2");
-  const count = Math.max(2, Math.min(120, Math.floor(Number(countText)) || 2));
-  const [error, setError] = useState("");
+  const remaining = existing?.groupId ? data.transactions.filter((tx) => tx.groupId === existing.groupId &&
+    (tx.installment != null && existing.installment != null ? tx.installment >= existing.installment : tx.date >= existing.date)).length : undefined;
+  const originalRepeat = transactionRepeat(existing, remaining);
+  const [repeat, setRepeat] = useState<Repeat>(originalRepeat);
+  const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [holderId, setHolderId] = useState<string>(existing ? existing.holderId ?? "" : currentUserId ?? "");
   const [pendingDraft, setPendingDraft] = useState<TransactionDraft | null>(null);
+  const recurrenceChanged = repeat.mode !== originalRepeat.mode || repeat.mode !== "none" && (
+    repeat.count !== originalRepeat.count || repeat.mode === "recurring" && (
+      repeat.frequency !== originalRepeat.frequency || repeat.frequency === "custom" && repeat.intervalDays !== originalRepeat.intervalDays));
+  const credit = type === "expense" && data.accountById.get(accountId)?.type === "credit";
+  const dateLabel = credit ? "Data da compra" : type === "income" ? paid ? "Data do recebimento" : "Data prevista de recebimento" : paid ? "Data do pagamento" : "Data de vencimento";
+  const managedCredit = credit && (!existing || !!existing.invoiceKey || existing.accountId !== accountId || existing.date !== date || recurrenceChanged);
+  const selectedAccount = data.accountById.get(accountId);
+  const cycleHint = (() => {
+    if (!credit || !selectedAccount || !date) return "";
+    if (existing?.invoiceKey && date === existing.date && accountId === existing.accountId) return `Vencimento da fatura: ${existing.invoiceDueDate?.split("-").reverse().join("/")}.`;
+    try { return `Vencimento da fatura: ${cardCycle(selectedAccount, date).invoiceDueDate.split("-").reverse().join("/")}. Compras no fechamento entram na próxima fatura.`; }
+    catch (error) { return error instanceof Error ? error.message : "Configure as datas do cartão em Contas."; }
+  })();
 
   const categories = useMemo(
     () => data.categories.filter((c) => c.kind === (type === "income" ? "income" : "expense")),
@@ -60,20 +78,26 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
 
   const changeType = (next: TxType) => {
     setType(next);
-    setError("");
+    if (next === "transfer") setRepeat((previous) => ({ ...previous, mode: "none" }));
     const category = categoryId ? data.categoryById.get(categoryId) : undefined;
     if (category && category.kind !== next) setCategoryId(null);
   };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (amount <= 0) return setError("Informe um valor maior que zero.");
-    if (!data.accountById.has(accountId)) return setError("Escolha uma conta.");
+    if (busy) return;
+    if (amount <= 0) return notify("Informe um valor maior que zero.");
+    if (!data.accountById.has(accountId)) return notify("Escolha uma conta.");
     if (type === "transfer") {
-      if (!data.accountById.has(toAccountId)) return setError("Escolha a conta de destino.");
-      if (toAccountId === accountId) return setError("As contas de origem e destino precisam ser diferentes.");
+      if (!data.accountById.has(toAccountId)) return notify("Escolha a conta de destino.");
+      if (toAccountId === accountId) return notify("As contas de origem e destino precisam ser diferentes.");
     } else if (!categoryId) {
-      return setError("Escolha uma categoria.");
+      return notify("Escolha uma categoria.");
+    }
+    if (!isISODate(date)) return notify("Informe uma data válida para o lançamento.");
+    if (type !== "transfer") {
+      try { validateRepeat(repeat); }
+      catch (error) { return notify(error instanceof Error ? error.message : "Confira os dados da repetição."); }
     }
     const draft: TransactionDraft = {
       type,
@@ -92,24 +116,34 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
   };
 
   const save = async (draft: TransactionDraft, scope: SeriesScope) => {
-    if (existing) {
+    if (busy) return;
+    setBusy(true);
+    try {
+    if (existing && recurrenceChanged) {
+      const ids = await changeRecurrence(existing.id, draft, repeat);
+      notify(`Repetição atualizada: ${ids.length} lançamento(s).`);
+    } else if (existing) {
       const ids = await updateTransaction(existing.id, draft, scope);
       notify(ids.length > 1 ? `${ids.length} lançamentos atualizados.` : "Lançamento atualizado.");
     } else {
-      const ids = await createTransaction(draft, { mode: type === "transfer" ? "none" : repeat, count });
+      const ids = await createTransaction(draft, type === "transfer" ? { mode: "none", count: 1 } : repeat);
       notify(ids.length > 1 ? `${ids.length} lançamentos criados.` : "Lançamento adicionado.");
     }
     onClose();
+    } catch (error) { notify(error instanceof Error ? error.message : "Não foi possível salvar o lançamento."); setPendingDraft(null); }
+    finally { setBusy(false); }
   };
 
   const remove = async (scope: "one" | "following") => {
     if (!existing) return;
+    try {
     const ids = await deleteTransaction(existing.id, scope);
     onClose();
     notify(ids.length > 1 ? `${ids.length} lançamentos excluídos.` : "Lançamento excluído.", {
       label: "Desfazer",
-      run: () => void restoreTransactions(ids),
+      run: () => void restoreTransactions(ids).catch((error: unknown) => notify(error instanceof Error ? error.message : "Não foi possível restaurar.")),
     });
+    } catch (error) { notify(error instanceof Error ? error.message : "Não foi possível excluir."); setConfirmDelete(false); }
   };
 
   const paidLabel = type === "income" ? "Recebido" : type === "transfer" ? "Transferência realizada" : "Pago";
@@ -122,10 +156,10 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
       <Button variant="ghost" onClick={() => setPendingDraft(null)}>
         Voltar
       </Button>
-      <Button variant="secondary" onClick={() => void save(pendingDraft, "one")}>
+      <Button variant="secondary" disabled={busy || recurrenceChanged} onClick={() => void save(pendingDraft, "one")}>
         Só este
       </Button>
-      <Button onClick={() => void save(pendingDraft, "following")}>Este e os próximos</Button>
+      <Button disabled={busy} onClick={() => void save(pendingDraft, "following")}>Este e os próximos</Button>
     </div>
   ) : confirmDelete ? (
     <div className="flex w-full flex-wrap items-center justify-end gap-2">
@@ -155,18 +189,19 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
           <Trash2 size={18} />
         </Button>
       )}
-      <Button variant="ghost" className="ml-auto" onClick={onClose}>
+      <Button variant="ghost" className="ml-auto" disabled={busy} onClick={onClose}>
         Cancelar
       </Button>
-      <Button type="submit" form="transaction-form">
-        Salvar
+      <Button type="submit" form="transaction-form" disabled={busy}>
+        {busy ? "Salvando…" : "Salvar"}
       </Button>
     </>
   );
 
   return (
-    <Modal open title={title} onClose={onClose} footer={footer}>
-      <form id="transaction-form" onSubmit={submit} className="space-y-4">
+    <Modal open title={title} onClose={() => { if (!busy) onClose(); }} footer={footer}>
+      <form id="transaction-form" noValidate onSubmit={submit} className="space-y-4">
+        <fieldset disabled={busy} className="space-y-4">
         <Segmented label="Tipo de lançamento" value={type} options={TYPE_OPTIONS} onChange={changeType} />
 
         <MoneyInput
@@ -174,7 +209,6 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
           value={amount}
           onChange={(v) => {
             setAmount(v);
-            setError("");
           }}
           large
           autoFocus={!existing}
@@ -182,12 +216,10 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
         />
 
         <Field label="Descrição">
-          <input
-            className={inputClass}
+          <DescriptionInput
             value={description}
-            maxLength={80}
             placeholder={type === "transfer" ? "Ex.: Pagamento da fatura" : "Ex.: Almoço, conta de luz…"}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={setDescription}
           />
         </Field>
 
@@ -204,7 +236,6 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
                     aria-pressed={active}
                     onClick={() => {
                       setCategoryId(c.id);
-                      setError("");
                     }}
                     className={`flex flex-col items-center gap-1 rounded-xl border px-1 py-2 text-xs font-semibold transition-colors ${
                       active ? "border-orange bg-orange-soft/60" : "border-transparent hover:bg-cream"
@@ -221,34 +252,24 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={type === "transfer" ? "De" : "Conta ou cartão"}>
-            <select className={inputClass} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-              {data.accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}{sharedSpace && a.holderId ? ` · ${memberById.get(a.holderId)?.name ?? "Ex-participante"}` : ""}
-                </option>
-              ))}
-            </select>
+            <Select label={type === "transfer" ? "De" : "Conta ou cartão"} value={accountId} onChange={setAccountId}
+              options={data.accounts.map((a) => ({ value: a.id, label: `${a.name}${sharedSpace && a.holderId ? ` · ${memberById.get(a.holderId)?.name ?? "Ex-participante"}` : ""}` }))} />
           </Field>
           {type === "transfer" ? (
             <Field label="Para">
-              <select className={inputClass} value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}>
-                {data.accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}{sharedSpace && a.holderId ? ` · ${memberById.get(a.holderId)?.name ?? "Ex-participante"}` : ""}
-                  </option>
-                ))}
-              </select>
+              <Select label="Para" value={toAccountId} onChange={setToAccountId}
+                options={data.accounts.map((a) => ({ value: a.id, label: `${a.name}${sharedSpace && a.holderId ? ` · ${memberById.get(a.holderId)?.name ?? "Ex-participante"}` : ""}` }))} />
             </Field>
           ) : (
-            <Field label="Data">
-              <input type="date" required className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
+            <Field label={dateLabel}>
+              <DatePicker label={dateLabel} required value={date} onChange={setDate} />
             </Field>
           )}
         </div>
 
         {type === "transfer" && (
           <Field label="Data">
-            <input type="date" required className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
+            <DatePicker label="Data" required value={date} onChange={setDate} />
           </Field>
         )}
 
@@ -270,61 +291,26 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
           ))}
         </div>
 
-        <Switch label={paidLabel} checked={paid} onChange={setPaidState} />
+        {managedCredit ? <p role="status" className="rounded-xl bg-cream p-3 text-sm text-muted">{cycleHint} O status é controlado pelo pagamento da fatura em Contas.</p>
+          : <Switch label={paidLabel} checked={paid} onChange={setPaidState} />}
+        {credit && !managedCredit && <p className="text-xs text-muted">Lançamento anterior à versão 1.2: mantemos o status original. Alterar a data, a conta ou a repetição vinculará a compra a uma fatura.</p>}
 
-        {!existing && type !== "transfer" && (
-          <div className="space-y-3">
-            <Segmented
-              label="Repetição"
-              value={repeat}
-              onChange={setRepeat}
-              options={[
-                { value: "none", label: "Única" },
-                { value: "installments", label: "Parcelada" },
-                { value: "monthly", label: "Mensal" },
-              ]}
-            />
-            {repeat !== "none" && (
-              <Field
-                label={repeat === "installments" ? "Número de parcelas" : "Repetir por quantos meses"}
-                hint={
-                  repeat === "installments"
-                    ? `${count}x de aproximadamente ${formatBRL(splitInstallments(amount, count)[0])}. Apenas a primeira segue o status acima; as demais ficam pendentes.`
-                    : `${count} lançamentos de ${formatBRL(amount)}, um por mês. Os próximos ficam pendentes.`
-                }
-              >
-                <input
-                  type="number"
-                  min={2}
-                  max={120}
-                  className={inputClass}
-                  value={countText}
-                  onChange={(e) => setCountText(e.target.value)}
-                  onBlur={() => setCountText(String(count))}
-                />
-              </Field>
-            )}
-          </div>
-        )}
+        {type !== "transfer" && <RecurrenceFields value={repeat} onChange={setRepeat} date={date} />}
 
         {existing?.groupId && (
           <p className="rounded-xl bg-cream px-3 py-2 text-sm text-muted">
             Este lançamento faz parte de uma série. Ao salvar, escolha se as alterações valem só para ele ou também para os
-            próximos. Nos próximos, o status de pago/pendente não muda e a nova data mantém a repetição mensal.
+            próximos. Mudar a repetição substitui este e os próximos, mantendo o histórico anterior. Alterações comuns preservam o status dos próximos e a frequência original.
           </p>
         )}
 
         {sharedSpace && (
           <Field label="Titular" hint="A quem pertence esta receita ou despesa. Usado nos relatórios por pessoa.">
-            <select className={inputClass} value={holderId} onChange={(e) => setHolderId(e.target.value)}>
-              <option value="">Sem titular (da família)</option>
-              {members.map((m) => (
-                <option key={m.userId} value={m.userId}>
-                  {m.name}{m.userId === currentUserId ? " (você)" : ""}
-                </option>
-              ))}
-              {holderId && !memberById.has(holderId) && <option value={holderId}>Ex-participante</option>}
-            </select>
+            <Select label="Titular" value={holderId} onChange={setHolderId} options={[
+              { value: "", label: "Sem titular (da família)" },
+              ...members.map((m) => ({ value: m.userId, label: `${m.name}${m.userId === currentUserId ? " (você)" : ""}` })),
+              ...(holderId && !memberById.has(holderId) ? [{ value: holderId, label: "Ex-participante" }] : []),
+            ]} />
           </Field>
         )}
 
@@ -343,11 +329,7 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
           />
         </Field>
 
-        {error && (
-          <p role="alert" className="rounded-xl bg-negative/10 px-3 py-2 text-sm font-semibold text-negative">
-            {error}
-          </p>
-        )}
+        </fieldset>
       </form>
     </Modal>
   );

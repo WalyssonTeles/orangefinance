@@ -23,7 +23,7 @@ export function accountBalances(
     if (id && balances.has(id)) balances.set(id, balances.get(id)! + delta);
   };
   for (const tx of transactions) {
-    const counts = tx.paid || (options.forecastUntil !== undefined && tx.date <= options.forecastUntil);
+    const counts = !!tx.invoiceKey || tx.paid || (options.forecastUntil !== undefined && tx.date <= options.forecastUntil);
     if (!counts) continue;
     if (tx.type === "income") add(tx.accountId, tx.amount);
     else if (tx.type === "expense") add(tx.accountId, -tx.amount);
@@ -143,8 +143,8 @@ export function monthlyHistory(transactions: readonly Transaction[], endMonth: s
 export function upcomingBills(transactions: readonly Transaction[], month: string, limit = 5): Transaction[] {
   const end = lastDayOfMonth(month);
   return transactions
-    .filter((tx) => tx.type === "expense" && !tx.paid && tx.date <= end)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt)
+    .filter((tx) => tx.type === "expense" && !tx.paid && (tx.invoiceDueDate ?? tx.date) <= end)
+    .sort((a, b) => (a.invoiceDueDate ?? a.date).localeCompare(b.invoiceDueDate ?? b.date) || a.createdAt - b.createdAt)
     .slice(0, limit);
 }
 
@@ -159,9 +159,10 @@ export function sortTransactions(transactions: readonly Transaction[]): Transact
   return [...transactions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
 }
 
-export function groupByDate(transactions: readonly Transaction[]): [string, Transaction[]][] {
+export function groupByDate(transactions: readonly Transaction[], ascending = false): [string, Transaction[]][] {
   const groups = new Map<string, Transaction[]>();
-  for (const tx of sortTransactions(transactions)) {
+  const sorted = sortTransactions(transactions);
+  for (const tx of ascending ? sorted.reverse() : sorted) {
     const list = groups.get(tx.date);
     if (list) list.push(tx);
     else groups.set(tx.date, [tx]);
@@ -178,4 +179,16 @@ export function matchesSearch(tx: Transaction, query: string, categories: Map<st
 
 export function normalize(text: string): string {
   return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+export function descriptionSuggestions(value: string, descriptions: readonly string[]): string[] {
+  const query = normalize(value.trim());
+  if (!query) return [];
+  const used = new Set<string>();
+  return descriptions.map((description) => description.trim()).filter((description) => {
+    const normalized = normalize(description);
+    if (normalized === query || !normalized.includes(query) || used.has(normalized)) return false;
+    used.add(normalized);
+    return true;
+  });
 }

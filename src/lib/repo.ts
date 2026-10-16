@@ -1,7 +1,10 @@
 import { db, type Account, type Budget, type Category, type FinanceDB, type Transaction } from "./db";
-import { addMonths } from "./dates";
+import { addMonths, isISODate } from "./dates";
 import { splitInstallments } from "./finance";
 import { backupSchema } from "./backup-schema";
+import { cardCycle, cardInvoices, invoicePayment, validateInvoices } from "./invoices";
+import { occurrenceDate, transactionRepeat, validateRepeat, type Repeat } from "./recurrence";
+export type { RepeatMode } from "./recurrence";
 
 type Draft<T> = Omit<T, "id" | "createdAt" | "updatedAt" | "deletedAt"> & { id?: string };
 
@@ -59,41 +62,69 @@ export async function seedDefaults(database: FinanceDB = db): Promise<void> {
 
 /* ---------- Transactions ---------- */
 
-export type RepeatMode = "none" | "installments" | "monthly";
-
 export type TransactionDraft = Omit<Draft<Transaction>, "groupId" | "installment" | "installments">;
+
+async function prepareDraft(draft: TransactionDraft, database: FinanceDB, legacyCredit = false): Promise<TransactionDraft> {
+  if (!Number.isSafeInteger(draft.amount) || draft.amount <= 0) throw new Error("Informe um valor maior que zero.");
+  if (!isISODate(draft.date)) throw new Error("Informe uma data válida.");
+  const account = await database.accounts.get(draft.accountId);
+  if (!account || account.deletedAt !== null) throw new Error("Escolha uma conta ativa.");
+  if (draft.type === "transfer") {
+    const target = draft.toAccountId ? await database.accounts.get(draft.toAccountId) : null;
+    if (!target || target.deletedAt !== null || target.id === account.id) throw new Error("Escolha uma conta de destino diferente da origem.");
+  } else {
+    const category = draft.categoryId ? await database.categories.get(draft.categoryId) : null;
+    if (!category || category.deletedAt !== null || category.kind !== draft.type) throw new Error("Escolha uma categoria compatível com o lançamento.");
+  }
+  if (draft.type === "expense" && account.type === "credit") {
+    if (legacyCredit) return draft;
+    const cycle = draft.invoiceKey && draft.invoiceDueDate ? { invoiceKey: draft.invoiceKey, invoiceDueDate: draft.invoiceDueDate } : cardCycle(account, draft.date);
+    await requireOpenInvoice(cycle.invoiceKey, database);
+    return { ...draft, ...cycle, paid: false, invoicePaymentKey: null };
+  }
+  return { ...draft, invoiceKey: null, invoiceDueDate: null, invoicePaymentKey: null };
+}
+
+async function requireOpenInvoice(key: string | null | undefined, database: FinanceDB) {
+  const payment = key ? await database.transactions.get(`invoice-payment:${key}`) : undefined;
+  if (payment && payment.deletedAt === null && payment.paid && payment.invoicePaymentKey === key) {
+    throw new Error("Esta fatura já foi paga. Reabra a fatura em Contas antes de alterar suas compras.");
+  }
+}
 
 export async function createTransaction(
   draft: TransactionDraft,
-  repeat: { mode: RepeatMode; count: number } = { mode: "none", count: 1 },
+  repeat: Repeat = { mode: "none", count: 1 },
   database: FinanceDB = db,
 ): Promise<string[]> {
-  const count = repeat.mode === "none" ? 1 : Math.max(2, Math.min(120, Math.floor(repeat.count)));
+  validateRepeat(repeat);
+  if (!isISODate(draft.date)) throw new Error("Informe uma data válida.");
+  if (draft.type === "transfer" && repeat.mode !== "none") throw new Error("Transferências não permitem repetição.");
+  return database.transaction("rw", database.transactions, database.accounts, database.categories, async () => {
+  const count = repeat.mode === "none" ? 1 : repeat.count;
   const now = stamp();
-  if (count === 1) {
-    const tx = fresh<Transaction>({ ...draft, groupId: null, installment: null, installments: null }, now);
-    await database.transactions.add(tx);
-    return [tx.id];
-  }
-  const groupId = uid();
+  const groupId = count > 1 ? uid() : null;
   const amounts = repeat.mode === "installments" ? splitInstallments(draft.amount, count) : Array(count).fill(draft.amount);
-  const items = amounts.map((amount, i) =>
+  if (amounts.some((amount) => amount <= 0)) throw new Error("O valor precisa permitir pelo menos um centavo por parcela.");
+  const items = await Promise.all(amounts.map(async (amount, i) =>
     fresh<Transaction>(
       {
-        ...draft,
-        id: undefined,
-        amount,
-        date: addMonths(draft.date, i),
-        paid: i === 0 ? draft.paid : false,
+        ...await prepareDraft({ ...draft, amount, date: occurrenceDate(draft.date, i, repeat), invoiceKey: null, invoiceDueDate: null, paid: i === 0 ? draft.paid : false }, database),
+        id: i === 0 ? draft.id : undefined,
         groupId,
-        installment: i + 1,
+        installment: count > 1 ? i + 1 : null,
         installments: repeat.mode === "installments" ? count : null,
+        repeatMode: repeat.mode === "monthly" ? "recurring" : repeat.mode,
+        frequency: repeat.mode === "monthly" || repeat.mode === "installments" ? "monthly" : repeat.frequency ?? "monthly",
+        intervalDays: repeat.mode === "recurring" && repeat.frequency === "custom" ? repeat.intervalDays ?? 14 : 14,
+        repeatCount: count,
       },
       now + i,
     ),
-  );
+  ));
   await database.transactions.bulkAdd(items);
   return items.map((t) => t.id);
+  });
 }
 
 export type SeriesScope = "one" | "following";
@@ -119,55 +150,175 @@ async function followingInSeries(tx: Transaction, database: FinanceDB): Promise<
 export async function updateTransaction(
   id: string, changes: Partial<TransactionDraft>, scope: SeriesScope = "one", database: FinanceDB = db,
 ): Promise<string[]> {
-  return database.transaction("rw", database.transactions, async () => {
+  return database.transaction("rw", database.transactions, database.accounts, database.categories, async () => {
     const tx = await database.transactions.get(id);
-    if (!tx) return [];
+    if (!tx || tx.deletedAt !== null) throw new Error("Lançamento não encontrado.");
+    if (tx.invoicePaymentKey) throw new Error("Gerencie o pagamento desta fatura em Contas.");
+    await requireOpenInvoice(tx.invoiceKey, database);
     const now = stamp();
     if (scope === "one" || !tx.groupId) {
-      await database.transactions.update(id, { ...changes, updatedAt: now });
+      const draft = { ...tx, ...changes };
+      if (changes.date && changes.date !== tx.date || changes.accountId && changes.accountId !== tx.accountId || changes.type && changes.type !== tx.type) {
+        draft.invoiceKey = null;
+        draft.invoiceDueDate = null;
+      }
+      // Pre-1.2 card entries retain their original semantics until explicitly moved or redated.
+      const legacyCredit = !tx.invoiceKey && draft.accountId === tx.accountId && draft.date === tx.date && draft.type === tx.type;
+      const prepared = await prepareDraft(draft, database, legacyCredit);
+      await database.transactions.update(id, { ...prepared, updatedAt: now });
       return [id];
     }
     const { paid: _paid, date, id: _id, ...shared } = changes;
     const targets = await followingInSeries(tx, database);
-    await database.transactions.bulkUpdate(targets.map((t) => ({
-      key: t.id,
-      changes: t.id === tx.id
-        ? { ...changes, updatedAt: now }
-        : { ...shared, date: date ? addMonths(date, monthIndex(t.date) - monthIndex(tx.date)) : t.date, updatedAt: now },
-    })));
+    for (const target of targets) {
+      await requireOpenInvoice(target.invoiceKey, database);
+      const repeat = transactionRepeat(tx);
+      const index = (target.installment ?? 1) - (tx.installment ?? 1);
+      const nextDate = !date ? target.date : tx.frequency && tx.frequency !== "monthly"
+        ? occurrenceDate(date, index, repeat) : addMonths(date, monthIndex(target.date) - monthIndex(tx.date));
+      const draft = { ...target, ...shared, ...(target.id === id ? changes : {}), date: nextDate };
+      const moved = draft.date !== target.date || draft.accountId !== target.accountId || draft.type !== target.type;
+      if (moved) { draft.invoiceKey = null; draft.invoiceDueDate = null; }
+      const prepared = await prepareDraft(draft, database, !target.invoiceKey && !moved);
+      await database.transactions.update(target.id, { ...prepared, updatedAt: now });
+    }
     return targets.map((t) => t.id);
   });
 }
 
 export async function setPaid(id: string, paid: boolean, database: FinanceDB = db) {
+  return database.transaction("rw", database.transactions, async () => {
+  const tx = await database.transactions.get(id);
+  if (!tx) throw new Error("Lançamento não encontrado.");
+  if (tx.invoiceKey || tx.invoicePaymentKey) throw new Error("O status deste lançamento é controlado pela fatura em Contas.");
   await database.transactions.update(id, { paid, updatedAt: stamp() });
+  });
 }
 
 /** Soft-deletes a transaction (and, optionally, the following ones of the same series). Returns affected ids. */
 export async function deleteTransaction(id: string, scope: SeriesScope = "one", database: FinanceDB = db) {
+  return database.transaction("rw", database.transactions, async () => {
   const tx = await database.transactions.get(id);
-  if (!tx) return [];
+  if (!tx) throw new Error("Lançamento não encontrado.");
+  if (tx.invoicePaymentKey) throw new Error("Reabra esta fatura em Contas para desfazer seu pagamento.");
   const targets = scope === "following" ? await followingInSeries(tx, database) : [tx];
+  for (const target of targets) await requireOpenInvoice(target.invoiceKey, database);
   const now = stamp();
   await database.transactions.bulkUpdate(targets.map((t) => ({ key: t.id, changes: { deletedAt: now, updatedAt: now } })));
   return targets.map((t) => t.id);
+  });
 }
 
 export async function restoreTransactions(ids: string[], database: FinanceDB = db) {
+  return database.transaction("rw", database.transactions, async () => {
+  for (const tx of await database.transactions.bulkGet(ids)) if (tx) await requireOpenInvoice(tx.invoiceKey, database);
   const now = stamp();
   await database.transactions.bulkUpdate(ids.map((key) => ({ key, changes: { deletedAt: null, updatedAt: now } })));
+  });
+}
+
+/** Replaces only the selected and future occurrences; earlier history stays untouched. */
+export async function changeRecurrence(id: string, draft: TransactionDraft, repeat: Repeat, database: FinanceDB = db) {
+  return database.transaction("rw", database.transactions, database.accounts, database.categories, async () => {
+    const tx = await database.transactions.get(id);
+    if (!tx || tx.deletedAt !== null) throw new Error("Lançamento não encontrado.");
+    if (tx.invoicePaymentKey) throw new Error("Gerencie o pagamento desta fatura em Contas.");
+    const targets = await followingInSeries(tx, database);
+    for (const target of targets) {
+      await requireOpenInvoice(target.invoiceKey, database);
+      if (target.id !== id && target.paid) throw new Error("Há ocorrências futuras pagas. Marque-as como pendentes antes de mudar a repetição.");
+    }
+    const now = stamp();
+    await database.transactions.bulkUpdate(targets.map((target) => ({ key: target.id, changes: { deletedAt: now, updatedAt: now } })));
+    const ids = await createTransaction({ ...draft, id: undefined }, repeat, database);
+    const first = (await database.transactions.get(ids[0]))!;
+    await database.transactions.delete(first.id);
+    await database.transactions.put({ ...first, id, createdAt: tx.createdAt });
+    return [id, ...ids.slice(1)];
+  });
+}
+
+export interface BatchEntry { draft: TransactionDraft; repeat: Repeat }
+
+export async function createBatch(entries: BatchEntry[], database: FinanceDB = db): Promise<Transaction[]> {
+  if (!entries.length || entries.length > 200) throw new Error("Adicione entre 1 e 200 linhas.");
+  if (entries.reduce((sum, item) => sum + (item.repeat.mode === "none" ? 1 : item.repeat.count), 0) > 5000) throw new Error("O lote não pode gerar mais de 5.000 lançamentos.");
+  return database.transaction("rw", database.transactions, database.accounts, database.categories, async () => {
+    const ids: string[] = [];
+    for (const [index, entry] of entries.entries()) {
+      try { ids.push(...await createTransaction(entry.draft, entry.repeat, database)); }
+      catch (error) { throw new Error(`Linha ${index + 1}: ${error instanceof Error ? error.message : "Não foi possível salvar."}`); }
+    }
+    const records = await database.transactions.bulkGet(ids);
+    return records.filter((record): record is Transaction => record !== undefined);
+  });
+}
+
+export async function undoBatch(records: Transaction[], database: FinanceDB = db) {
+  return database.transaction("rw", database.transactions, async () => {
+    for (const record of records) {
+      const current = await database.transactions.get(record.id);
+      if (JSON.stringify(current) !== JSON.stringify(record)) throw new Error("O lote foi alterado depois de salvo. Revise os lançamentos antes de excluí-los.");
+      await requireOpenInvoice(record.invoiceKey, database);
+    }
+    const now = stamp();
+    await database.transactions.bulkUpdate(records.map((record) => ({ key: record.id, changes: { deletedAt: now, updatedAt: now } })));
+  });
+}
+
+export async function payInvoice(key: string, accountId: string, date: string, database: FinanceDB = db) {
+  return database.transaction("rw", database.transactions, database.accounts, async () => {
+    const all = await database.transactions.toArray();
+    if (invoicePayment(all, key)) throw new Error("Esta fatura já foi paga.");
+    const card = (await database.accounts.toArray()).find((account) => key.startsWith(`${account.id}:`) && account.type === "credit" && account.deletedAt === null);
+    const source = await database.accounts.get(accountId);
+    if (!source || source.deletedAt !== null || source.type === "credit") throw new Error("Escolha uma conta de pagamento.");
+    if (!isISODate(date)) throw new Error("Informe uma data válida.");
+    const invoice = card && cardInvoices(all, card.id).find((item) => item.key === key);
+    if (!invoice) throw new Error("Fatura não encontrada.");
+    const payment = fresh<Transaction>({
+      id: `invoice-payment:${key}`, type: "transfer", accountId, toAccountId: card.id,
+      amount: invoice.amount, description: `Pagamento de fatura · ${card.name}`, date, paid: true,
+      categoryId: null, notes: "", groupId: null, installment: null, installments: null, invoicePaymentKey: key,
+    });
+    await database.transactions.put(payment);
+  });
+}
+
+export async function reopenInvoice(key: string, database: FinanceDB = db) {
+  return database.transaction("rw", database.transactions, async () => {
+    const payment = invoicePayment(await database.transactions.toArray(), key);
+    if (!payment) throw new Error("Esta fatura não está paga.");
+    await database.transactions.update(payment.id, { deletedAt: stamp(), updatedAt: stamp() });
+  });
+}
+
+export async function reorderAccounts(ids: string[], database: FinanceDB = db) {
+  return database.transaction("rw", database.accounts, async () => {
+    const active = (await database.accounts.toArray()).filter((account) => account.deletedAt === null);
+    if (new Set(ids).size !== ids.length || active.length !== ids.length || active.some((account) => !ids.includes(account.id))) throw new Error("A lista de contas mudou. Tente reordenar novamente.");
+    const now = stamp();
+    await database.accounts.bulkUpdate(ids.map((id, position) => ({ key: id, changes: { position, updatedAt: now } })));
+  });
 }
 
 /* ---------- Accounts, categories, budgets ---------- */
 
 export async function saveAccount(draft: Draft<Account>, database: FinanceDB = db) {
+  return database.transaction("rw", database.accounts, database.transactions, async () => {
+  for (const day of [draft.closingDay, draft.dueDay]) if (day != null && (!Number.isInteger(day) || day < 1 || day > 31)) throw new Error("Os dias de fechamento e vencimento precisam estar entre 1 e 31.");
   if (draft.id && (await database.accounts.get(draft.id))) {
+    const current = await database.accounts.get(draft.id);
+    if (current?.type !== draft.type && (await database.transactions.toArray()).some((tx) => tx.deletedAt === null && tx.invoiceKey && tx.accountId === draft.id)) {
+      throw new Error("Este cartão possui faturas vinculadas e não pode mudar de tipo.");
+    }
     await database.accounts.update(draft.id, { ...draft, updatedAt: stamp() });
     return draft.id;
   }
   const account = fresh<Account>(draft);
   await database.accounts.add(account);
   return account.id;
+  });
 }
 
 async function usedByTransactions(field: "accountId" | "categoryId", id: string, database: FinanceDB) {
@@ -229,7 +380,7 @@ export async function setSetting(key: string, value: unknown, database: FinanceD
 
 /* ---------- Backup ---------- */
 
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
 
 export interface Backup {
   app: "orange-finance";
@@ -279,11 +430,13 @@ export function parseBackup(text: string): Backup {
   }
   const parsed = backupSchema.safeParse(data);
   if (!parsed.success) throw new Error("O backup contém registros inválidos ou valores incompatíveis.");
+  validateInvoices(parsed.data.accounts, parsed.data.transactions);
   return parsed.data;
 }
 
 /** Replaces every local record with the backup content. */
 export async function importBackup(backup: Backup, database: FinanceDB = db) {
+  validateInvoices(backup.accounts, backup.transactions);
   const tables = [database.accounts, database.categories, database.transactions, database.budgets, database.settings];
   await database.transaction("rw", tables, async () => {
     await Promise.all(tables.map((t) => t.clear()));
@@ -296,7 +449,7 @@ export async function importBackup(backup: Backup, database: FinanceDB = db) {
 }
 
 export async function wipeAll(database: FinanceDB = db) {
-  const tables = [database.accounts, database.categories, database.transactions, database.budgets, database.settings];
+  const tables = [database.accounts, database.categories, database.transactions, database.budgets, database.settings, database.releaseBackups];
   await database.transaction("rw", tables, async () => {
     await Promise.all(tables.map((t) => t.clear()));
   });

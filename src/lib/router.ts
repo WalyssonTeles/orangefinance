@@ -25,7 +25,14 @@ export function routeHref(route: Route, section?: string | null, params?: Record
 }
 
 export function navigate(route: Route, section?: string | null, params?: Record<string, string>) {
-  window.location.hash = routeHref(route, section, params).slice(1);
+  const next = routeHref(route, section, params);
+  if (window.location.hash === next) {
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  } else window.location.hash = next.slice(1);
+}
+
+export function navigateToTransactions(params: Record<string, string> = {}) {
+  navigate("lancamentos", "lista", params);
 }
 
 /** Updates the URL without adding a history entry or triggering navigation. */
