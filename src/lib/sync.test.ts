@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it } from "vitest";
 import { FinanceDB } from "./db";
 import { seedDefaults, setSetting, wipeAll, exportBackup, importBackup, parseBackup } from "./repo";
-import { hasUserData, readSyncData, stable, type SyncData } from "./sync-data";
+import { hasUserData, parseSyncData, readSyncData, stable, type SyncData } from "./sync-data";
 import { connectSync, switchWorkspace, syncOnce, SyncConflict, type RemoteSnapshot, type SyncRemote } from "./sync";
 
 const databases: FinanceDB[] = [];
@@ -14,7 +14,8 @@ function memoryRemote(): SyncRemote & { snapshot: RemoteSnapshot | null; beforeW
   return {
     workspaceId: "personal",
     snapshot: null,
-    async read() { return structuredClone(this.snapshot); },
+    // Mirrors supabaseRemote, which validates and normalizes every snapshot it reads.
+    async read() { return this.snapshot && { revision: this.snapshot.revision, data: parseSyncData(structuredClone(this.snapshot.data)) }; },
     async write(revision, data) {
       if (this.beforeWrite) { const task = this.beforeWrite; this.beforeWrite = undefined; await task(); }
       if ((this.snapshot?.revision ?? 0) !== revision) return false;
@@ -278,6 +279,35 @@ describe("bidirectional synchronization", () => {
     expect((await a.accounts.toArray())[0].name).toBe("Conta familiar pendente");
     await syncOnce("user-a", family, a);
     expect(family.snapshot?.data.accounts[0].name).toBe("Conta familiar pendente");
+  });
+
+  it("upgrades 0.1 synchronization state without false conflicts or losing the new holder field", async () => {
+    const { a, b, remote } = await pair();
+    const account = (await a.accounts.toArray())[0];
+    const category = (await a.categories.toArray())[0];
+    await a.transactions.add({
+      id: "tx-legacy", type: "expense", amount: 100, description: "Antigo", date: "2026-01-01", accountId: account.id,
+      toAccountId: null, categoryId: category.id, paid: true, notes: "", groupId: null, installment: null, installments: null,
+      createdAt: 1, updatedAt: 1, deletedAt: null,
+    });
+    await syncOnce("user-a", remote, a);
+    await syncOnce("user-a", remote, b);
+
+    // Recreate exactly what 0.1 stored: no holderId in the cloud, in the sync bases or in local rows.
+    const strip = (data: SyncData) => ({ ...data, transactions: data.transactions.map(({ holderId: _h, ...rest }) => rest) }) as unknown as SyncData;
+    remote.snapshot = { revision: remote.snapshot!.revision, data: strip(remote.snapshot!.data) };
+    for (const db of [a, b]) {
+      const connection = (await db.syncState.get("connection"))!;
+      await db.syncState.put({ ...connection, base: strip(connection.base) });
+      await db.transactions.toCollection().modify((t) => { delete t.holderId; });
+    }
+
+    await b.transactions.update("tx-legacy", { holderId: "user-a", updatedAt: 2 });
+    await syncOnce("user-a", remote, b);
+    await expect(syncOnce("user-a", remote, a)).resolves.toBeUndefined();
+    expect((await a.transactions.get("tx-legacy"))?.holderId).toBe("user-a");
+    expect((await a.transactions.get("tx-legacy"))?.description).toBe("Antigo");
+    expect(stable(await readSyncData(a))).toBe(stable(await readSyncData(b)));
   });
 
   it("does not send a private snapshot to a family remote selected by another tab", async () => {

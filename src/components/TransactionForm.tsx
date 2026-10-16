@@ -10,8 +10,11 @@ import {
   restoreTransactions,
   updateTransaction,
   type RepeatMode,
+  type SeriesScope,
+  type TransactionDraft,
 } from "../lib/repo";
 import { useApp, type TransactionRequest } from "../state";
+import { useSync } from "../sync-context";
 import { categoryIcon, ColorIcon } from "./icons";
 import { Modal } from "./Modal";
 import { MoneyInput } from "./MoneyInput";
@@ -24,7 +27,8 @@ const TYPE_OPTIONS: { value: TxType; label: string; activeClass: string }[] = [
 ];
 
 export function TransactionForm({ request, onClose }: { request: TransactionRequest; onClose: () => void }) {
-  const { data, notify } = useApp();
+  const { data, notify, sharedSpace, members, memberById, currentUserId } = useApp();
+  const { activeSpace, bound } = useSync();
   const existing = request.id ? data.transactions.find((t) => t.id === request.id) : undefined;
   const moneyAccounts = data.accounts.filter((a) => !isCredit(a));
 
@@ -46,6 +50,8 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
   const count = Math.max(2, Math.min(120, Math.floor(Number(countText)) || 2));
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [holderId, setHolderId] = useState<string>(existing ? existing.holderId ?? "" : currentUserId ?? "");
+  const [pendingDraft, setPendingDraft] = useState<TransactionDraft | null>(null);
 
   const categories = useMemo(
     () => data.categories.filter((c) => c.kind === (type === "income" ? "income" : "expense")),
@@ -69,7 +75,7 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
     } else if (!categoryId) {
       return setError("Escolha uma categoria.");
     }
-    const draft = {
+    const draft: TransactionDraft = {
       type,
       amount,
       description: description.trim(),
@@ -79,10 +85,16 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
       categoryId: type === "transfer" ? null : categoryId,
       paid,
       notes: notes.trim(),
+      ...(sharedSpace || existing?.holderId ? { holderId: sharedSpace ? holderId || null : existing?.holderId ?? null } : {}),
     };
+    if (existing?.groupId) return setPendingDraft(draft);
+    await save(draft, "one");
+  };
+
+  const save = async (draft: TransactionDraft, scope: SeriesScope) => {
     if (existing) {
-      await updateTransaction(existing.id, draft);
-      notify("Lançamento atualizado.");
+      const ids = await updateTransaction(existing.id, draft, scope);
+      notify(ids.length > 1 ? `${ids.length} lançamentos atualizados.` : "Lançamento atualizado.");
     } else {
       const ids = await createTransaction(draft, { mode: type === "transfer" ? "none" : repeat, count });
       notify(ids.length > 1 ? `${ids.length} lançamentos criados.` : "Lançamento adicionado.");
@@ -104,7 +116,18 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
   const target = data.accountById.get(toAccountId);
   const title = existing ? "Editar lançamento" : type === "transfer" && target && isCredit(target) ? "Pagar fatura" : "Novo lançamento";
 
-  const footer = confirmDelete ? (
+  const footer = pendingDraft ? (
+    <div className="flex w-full flex-wrap items-center justify-end gap-2">
+      <span className="mr-auto text-sm font-semibold">Aplicar alterações em:</span>
+      <Button variant="ghost" onClick={() => setPendingDraft(null)}>
+        Voltar
+      </Button>
+      <Button variant="secondary" onClick={() => void save(pendingDraft, "one")}>
+        Só este
+      </Button>
+      <Button onClick={() => void save(pendingDraft, "following")}>Este e os próximos</Button>
+    </div>
+  ) : confirmDelete ? (
     <div className="flex w-full flex-wrap items-center justify-end gap-2">
       <span className="mr-auto text-sm font-semibold">Excluir lançamento?</span>
       <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
@@ -286,7 +309,28 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
 
         {existing?.groupId && (
           <p className="rounded-xl bg-cream px-3 py-2 text-sm text-muted">
-            Este lançamento faz parte de uma série. As alterações valem apenas para ele.
+            Este lançamento faz parte de uma série. Ao salvar, escolha se as alterações valem só para ele ou também para os
+            próximos. Nos próximos, o status de pago/pendente não muda e a nova data mantém a repetição mensal.
+          </p>
+        )}
+
+        {sharedSpace && (
+          <Field label="Titular" hint="A quem pertence esta receita ou despesa. Usado nos relatórios por pessoa.">
+            <select className={inputClass} value={holderId} onChange={(e) => setHolderId(e.target.value)}>
+              <option value="">Sem titular (da família)</option>
+              {members.map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.name}{m.userId === currentUserId ? " (você)" : ""}
+                </option>
+              ))}
+              {holderId && !memberById.has(holderId) && <option value={holderId}>Ex-participante</option>}
+            </select>
+          </Field>
+        )}
+
+        {bound && activeSpace && (
+          <p className="text-xs text-muted">
+            Espaço: <strong>{activeSpace.kind === "personal" ? "Pessoal" : activeSpace.name}</strong>
           </p>
         )}
 

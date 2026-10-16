@@ -10,11 +10,12 @@ const syncFields = {
   deletedAt: timestamp.nullable(),
 };
 
+// Records keep unknown fields so data written by newer app versions survives older parsers.
 export const backupSchema = z.object({
   app: z.literal("orange-finance"),
   version: z.literal(1),
   exportedAt: z.string(),
-  accounts: z.array(z.object({
+  accounts: z.array(z.looseObject({
     ...syncFields,
     name: z.string(),
     type: z.enum(["checking", "savings", "wallet", "credit", "investment"]),
@@ -22,14 +23,14 @@ export const backupSchema = z.object({
     initialBalance: integer,
     creditLimit: integer.nullable(),
   })),
-  categories: z.array(z.object({
+  categories: z.array(z.looseObject({
     ...syncFields,
     name: z.string(),
     kind: z.enum(["expense", "income"]),
     color: z.string(),
     icon: z.string(),
   })),
-  transactions: z.array(z.object({
+  transactions: z.array(z.looseObject({
     ...syncFields,
     type: z.enum(["expense", "income", "transfer"]),
     amount: integer.nonnegative(),
@@ -43,8 +44,10 @@ export const backupSchema = z.object({
     groupId: id.nullable(),
     installment: integer.positive().nullable(),
     installments: integer.positive().nullable(),
+    /** User who owns the entry in a shared space; null for personal spaces and entries created before 1.0. */
+    holderId: id.nullable().default(null),
   })),
-  budgets: z.array(z.object({
+  budgets: z.array(z.looseObject({
     ...syncFields,
     categoryId: id,
     amount: integer.nonnegative(),

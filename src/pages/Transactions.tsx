@@ -3,12 +3,14 @@ import { useMemo, useState } from "react";
 import { Money } from "../components/Money";
 import { TransactionRow } from "../components/TransactionRow";
 import { Button, Card, EmptyState, inputClass, MonthPicker, PageHeader } from "../components/ui";
-import type { TxType } from "../lib/db";
+import type { Transaction, TxType } from "../lib/db";
 import { dayLabel, monthLabel } from "../lib/dates";
 import { groupByDate, inMonth, matchesSearch, monthSummary } from "../lib/finance";
+import { replaceParams, useLocation } from "../lib/router";
 import { useApp } from "../state";
 
 type Filter = "all" | TxType | "pending";
+const NO_HOLDER = "__none__";
 
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "Todos" },
@@ -18,28 +20,55 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "pending", label: "Pendentes" },
 ];
 
+function filterFromParam(value: string | null): Filter {
+  return FILTERS.some((f) => f.value === value) ? (value as Filter) : "all";
+}
+
+function matchesFilter(t: Transaction, filter: Filter): boolean {
+  return filter === "all" || (filter === "pending" ? !t.paid : t.type === filter);
+}
+
 export function Transactions() {
-  const { data, month, setMonth, openTransaction } = useApp();
+  const { data, month, setMonth, openTransaction, sharedSpace, members, memberById } = useApp();
+  const { params } = useLocation();
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilterState] = useState<Filter>(() => filterFromParam(params.get("tipo")));
   const [accountId, setAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [holderId, setHolderId] = useState("");
+
+  const setFilter = (next: Filter) => {
+    setFilterState(next);
+    replaceParams("lancamentos", null, next === "all" ? {} : { tipo: next });
+  };
 
   const monthTx = useMemo(() => data.transactions.filter((t) => inMonth(t, month)), [data.transactions, month]);
-  const summary = useMemo(() => monthSummary(monthTx, month), [monthTx, month]);
+  const personTx = useMemo(
+    () => !sharedSpace || !holderId ? monthTx : monthTx.filter((t) => (holderId === NO_HOLDER ? !t.holderId : t.holderId === holderId)),
+    [monthTx, holderId, sharedSpace],
+  );
+  const summary = useMemo(() => monthSummary(personTx, month), [personTx, month]);
+
+  // Only categories that appear in the entries currently on screen (month, person and type filters).
+  const availableCategories = useMemo(() => {
+    const used = new Set(personTx.filter((t) => matchesFilter(t, filter)).map((t) => t.categoryId).filter(Boolean));
+    if (categoryId) used.add(categoryId);
+    return data.categories.filter((c) => used.has(c.id));
+  }, [personTx, filter, categoryId, data.categories]);
+  const hasUnassigned = sharedSpace && monthTx.some((t) => !t.holderId);
 
   const groups = useMemo(() => {
-    const visible = monthTx.filter(
+    const visible = personTx.filter(
       (t) =>
-        (filter === "all" || (filter === "pending" ? !t.paid : t.type === filter)) &&
+        matchesFilter(t, filter) &&
         (!accountId || t.accountId === accountId || t.toAccountId === accountId) &&
         (!categoryId || t.categoryId === categoryId) &&
         matchesSearch(t, query, data.categoryById),
     );
     return groupByDate(visible);
-  }, [monthTx, filter, accountId, categoryId, query, data.categoryById]);
+  }, [personTx, filter, accountId, categoryId, query, data.categoryById]);
 
-  const filtered = query || filter !== "all" || accountId || categoryId;
+  const filtered = query || filter !== "all" || accountId || categoryId || holderId;
 
   return (
     <div>
@@ -98,6 +127,26 @@ export function Transactions() {
               </button>
             ))}
           </div>
+          {sharedSpace && members.length > 0 && (
+            <div className="drag-row flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filtrar por pessoa">
+              {[{ id: "", name: "Todos" }, ...members.map((m) => ({ id: m.userId, name: m.name })),
+                ...(hasUnassigned ? [{ id: NO_HOLDER, name: "Sem titular" }] : []),
+                ...(holderId && holderId !== NO_HOLDER && !memberById.has(holderId) ? [{ id: holderId, name: "Ex-participante" }] : [])]
+                .map((person) => (
+                  <button
+                    key={person.id || "all"}
+                    type="button"
+                    aria-pressed={holderId === person.id}
+                    onClick={() => setHolderId(person.id)}
+                    className={`h-9 shrink-0 rounded-full border px-3.5 text-sm font-semibold transition-colors ${
+                      holderId === person.id ? "border-brand bg-orange-soft text-brand-ink" : "border-line text-muted hover:text-ink"
+                    }`}
+                  >
+                    {person.name}
+                  </button>
+                ))}
+            </div>
+          )}
           <div className="grid gap-2 sm:grid-cols-2">
             <select aria-label="Filtrar por conta" className={inputClass} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
               <option value="">Todas as contas</option>
@@ -108,10 +157,10 @@ export function Transactions() {
               ))}
             </select>
             <select aria-label="Filtrar por categoria" className={inputClass} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-              <option value="">Todas as categorias</option>
-              {data.categories.map((c) => (
+              <option value="">{availableCategories.length ? "Todas as categorias" : "Nenhuma categoria nesta lista"}</option>
+              {availableCategories.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} ({c.kind === "income" ? "receita" : "despesa"})
+                  {c.name}{filter === "all" || filter === "pending" ? ` (${c.kind === "income" ? "receita" : "despesa"})` : ""}
                 </option>
               ))}
             </select>
@@ -124,6 +173,7 @@ export function Transactions() {
                 setFilter("all");
                 setAccountId("");
                 setCategoryId("");
+                setHolderId("");
               }}
               className="inline-flex items-center gap-1 text-sm font-semibold text-brand-ink hover:underline"
             >

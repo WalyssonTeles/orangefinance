@@ -17,11 +17,13 @@ import {
   totalsByCategory,
   upcomingBills,
 } from "../lib/finance";
-import { useSetting } from "../lib/hooks";
+import { useProfile } from "../lib/hooks";
 import { loadDemoData } from "../lib/demo";
 import { setPaid } from "../lib/repo";
 import { navigate } from "../lib/router";
 import { useApp } from "../state";
+import { useSync } from "../sync-context";
+import { SpaceSwitcher } from "../components/SpaceSwitcher";
 
 function greeting() {
   const hour = new Date().getHours();
@@ -31,9 +33,11 @@ function greeting() {
 }
 
 export function Dashboard() {
-  const { data, month, setMonth, openTransaction, notify } = useApp();
-  const name = useSetting("userName", "");
+  const { data, month, setMonth, openTransaction, notify, sharedSpace, members } = useApp();
+  const { session } = useSync();
+  const { name } = useProfile(session?.user.id ?? null);
   const { accounts, transactions, categoryById, budgets } = data;
+  const openList = (tipo?: "income" | "expense") => navigate("lancamentos", null, tipo ? { tipo } : undefined);
 
   const stats = useMemo(() => {
     const balances = accountBalances(accounts, transactions);
@@ -52,6 +56,15 @@ export function Dashboard() {
     };
   }, [accounts, transactions, budgets, month]);
 
+  const byPerson = useMemo(() => {
+    if (!sharedSpace) return [];
+    const monthTx = transactions.filter((t) => t.date.startsWith(month));
+    const rows = members.map((m) => ({ id: m.userId, name: m.name, ...monthSummary(monthTx.filter((t) => t.holderId === m.userId), month) }));
+    const unassigned = monthTx.filter((t) => !t.holderId || !members.some((m) => m.userId === t.holderId));
+    if (unassigned.length) rows.push({ id: "", name: "Sem titular", ...monthSummary(unassigned, month) });
+    return rows;
+  }, [sharedSpace, members, transactions, month]);
+
   const historyMax = Math.max(1, ...stats.history.flatMap((h) => [h.income, h.expense]));
   const topCategories = stats.byCategory.slice(0, 5);
   const otherShare = stats.byCategory.slice(5).reduce((sum, c) => sum + c.total, 0);
@@ -67,10 +80,12 @@ export function Dashboard() {
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-muted">{greeting()}{name ? "," : "!"}</p>
-          {name && <h1 className="font-display text-[1.75rem] leading-tight font-bold tracking-tight sm:text-[2rem]">{name}</h1>}
-          {!name && <h1 className="font-display text-[1.75rem] leading-tight font-bold tracking-tight sm:text-[2rem]">Suas finanças</h1>}
+          <h1 className="font-display text-[1.75rem] leading-tight font-bold tracking-tight sm:text-[2rem]">{name || "Suas finanças"}</h1>
+          <div className="mt-1.5">
+            <SpaceSwitcher />
+          </div>
         </div>
         <MonthPicker month={month} onChange={setMonth} />
       </header>
@@ -83,34 +98,67 @@ export function Dashboard() {
             <line key={deg} x1="50" y1="50" x2="50" y2="8" stroke="white" strokeWidth="3" transform={`rotate(${deg} 50 50)`} />
           ))}
         </svg>
-        <p className="relative text-sm font-semibold text-white/95">Saldo em contas</p>
-        <Money fit cents={stats.balance} className="relative mt-1 py-0.5 font-display text-[2.4rem] leading-none font-bold tracking-tight sm:text-[2.9rem]" />
-        {stats.forecast !== null && (
-          <p className="relative mt-2 text-sm text-white/95">
-            Previsto para o fim de {monthLabel(month, false).toLowerCase()}: <Money cents={stats.forecast} className="font-semibold" />
-          </p>
-        )}
+        <button
+          type="button"
+          onClick={() => openList()}
+          aria-label="Ver todas as entradas e saídas do mês"
+          className="relative -m-2 block w-[calc(100%+1rem)] rounded-2xl p-2 text-left transition-colors hover:bg-white/10 focus-visible:outline-white"
+        >
+          <span className="block text-sm font-semibold text-white/95">Saldo em contas</span>
+          <Money fit cents={stats.balance} className="mt-1 py-0.5 font-display text-[2.4rem] leading-none font-bold tracking-tight sm:text-[2.9rem]" />
+          {stats.forecast !== null && (
+            <span className="mt-2 block text-sm text-white/95">
+              Previsto para o fim de {monthLabel(month, false).toLowerCase()}: <Money cents={stats.forecast} className="font-semibold" />
+            </span>
+          )}
+        </button>
         <div className="relative mt-5 grid grid-cols-2 gap-2.5 sm:gap-3">
-          <div className="min-w-0 rounded-2xl bg-white/16 p-3">
-            <p className="flex items-center gap-1.5 text-sm font-medium text-white/95">
+          <button
+            type="button"
+            onClick={() => openList("income")}
+            aria-label="Ver receitas do mês"
+            className="min-w-0 rounded-2xl bg-white/16 p-3 text-left transition-colors hover:bg-white/24 focus-visible:outline-white"
+          >
+            <span className="flex items-center gap-1.5 text-sm font-medium text-white/95">
               <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white/25">
                 <ArrowUpRight size={14} strokeWidth={2.6} />
               </span>
               Receitas
-            </p>
+            </span>
             <Money fit cents={stats.summary.income} className="mt-1 text-lg font-bold" />
-          </div>
-          <div className="min-w-0 rounded-2xl bg-white/16 p-3">
-            <p className="flex items-center gap-1.5 text-sm font-medium text-white/95">
+          </button>
+          <button
+            type="button"
+            onClick={() => openList("expense")}
+            aria-label="Ver despesas do mês"
+            className="min-w-0 rounded-2xl bg-white/16 p-3 text-left transition-colors hover:bg-white/24 focus-visible:outline-white"
+          >
+            <span className="flex items-center gap-1.5 text-sm font-medium text-white/95">
               <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white/25">
                 <ArrowDownRight size={14} strokeWidth={2.6} />
               </span>
               Despesas
-            </p>
+            </span>
             <Money fit cents={stats.summary.expense} className="mt-1 text-lg font-bold" />
-          </div>
+          </button>
         </div>
       </section>
+
+      {byPerson.length > 0 && (
+        <Card>
+          <CardHeader title="Por pessoa" />
+          <ul className="divide-y divide-line">
+            {byPerson.map((person) => (
+              <li key={person.id || "none"} className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-0.5 py-2.5 text-sm sm:grid-cols-[1fr_auto_auto_auto]">
+                <span className="truncate font-semibold">{person.name}</span>
+                <Money cents={person.net} signed className={`text-right font-bold ${person.net < 0 ? "text-negative" : "text-positive"}`} />
+                <span className="text-muted sm:text-right">Receitas <Money cents={person.income} className="font-semibold text-positive" /></span>
+                <span className="text-right text-muted">Despesas <Money cents={person.expense} className="font-semibold text-ink" /></span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {transactions.length === 0 && (
         <Card>

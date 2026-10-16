@@ -3,7 +3,6 @@ import { downloadBackup } from "../lib/download-backup";
 import { supabaseConfigError } from "../lib/supabase";
 import { useSync } from "../sync-context";
 import { Button, Card, CardHeader } from "./ui";
-import { WorkspacePanel } from "./WorkspacePanel";
 
 export function SyncPanel({ onboarding = false }: { onboarding?: boolean }) {
   const sync = useSync();
@@ -31,7 +30,9 @@ export function SyncPanel({ onboarding = false }: { onboarding?: boolean }) {
           ) : (
             <>
               <p className="break-all text-sm">Conta: <strong>{sync.session.user.email}</strong></p>
-              {!sync.wrongAccount && sync.bound && <WorkspacePanel />}
+              {!sync.wrongAccount && sync.bound && sync.activeSpace?.kind === "shared" && (
+                <p className="text-sm text-muted">Espaço aberto: <strong>{sync.activeSpace.name}</strong>. Gerencie em Espaço compartilhado.</p>
+              )}
               {sync.wrongAccount ? (
                 <p role="alert" className="text-sm text-negative">
                   Este navegador tem dados de outra conta. Saia e entre na conta originalmente vinculada.

@@ -4,8 +4,9 @@ import { Logo, Wordmark } from "./components/Logo";
 import { TransactionForm } from "./components/TransactionForm";
 import { IconButton } from "./components/ui";
 import { currentMonth } from "./lib/dates";
-import { useFinanceData, useSetting } from "./lib/hooks";
-import { navigate, useRoute, type Route } from "./lib/router";
+import { useFinanceData, useMembers, useSetting } from "./lib/hooks";
+import { navigate, useLocation, type Route } from "./lib/router";
+import { useSync } from "./sync-context";
 import { Accounts } from "./pages/Accounts";
 import { Budgets } from "./pages/Budgets";
 import { Dashboard } from "./pages/Dashboard";
@@ -31,7 +32,7 @@ const PAGES: Record<Route, ComponentType> = {
 
 export default function App() {
   const data = useFinanceData();
-  const route = useRoute();
+  const { route, section } = useLocation();
   const hideOnStart = useSetting<boolean | undefined>("hideValues", undefined);
   const [month, setMonth] = useState(currentMonth);
   const [hidden, setHidden] = useState(false);
@@ -67,9 +68,17 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [request]);
 
+  const sync = useSync();
+  const sharedSpace = sync.bound && sync.activeSpace?.kind === "shared";
+  const members = useMembers(sharedSpace ? sync.activeSpace?.id : null);
+  const currentUserId = sync.session?.user.id ?? null;
+
   const state = useMemo<AppState>(
-    () => ({ data, month, setMonth, hidden, toggleHidden: () => setHidden((h) => !h), openTransaction, notify }),
-    [data, month, hidden, openTransaction, notify],
+    () => ({
+      data, month, setMonth, hidden, toggleHidden: () => setHidden((h) => !h), openTransaction, notify,
+      sharedSpace, members, memberById: new Map(members.map((m) => [m.userId, m])), currentUserId,
+    }),
+    [data, month, hidden, openTransaction, notify, sharedSpace, members, currentUserId],
   );
 
   if (!data.ready) {
@@ -88,9 +97,9 @@ export default function App() {
       <div className="min-h-dvh lg:pl-64">
         {/* Desktop sidebar */}
         <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface/60 px-4 py-6 lg:flex">
-          <div className="px-2">
+          <a href="#/" aria-label="Orange Finance — ir para o início" className="block rounded-xl px-2">
             <Wordmark />
-          </div>
+          </a>
           <button
             type="button"
             onClick={() => openTransaction()}
@@ -133,7 +142,9 @@ export default function App() {
 
         {/* Mobile top bar */}
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-line/70 bg-cream/90 px-4 backdrop-blur-md lg:hidden">
-          <Wordmark />
+          <a href="#/" aria-label="Orange Finance — ir para o início" className="rounded-xl">
+            <Wordmark />
+          </a>
           <div className="flex items-center">
             <IconButton label={hidden ? "Mostrar valores" : "Ocultar valores"} onClick={state.toggleHidden}>
               <EyeIcon size={20} />
@@ -148,7 +159,7 @@ export default function App() {
           </div>
         </header>
 
-        <main key={route} className="page-in mx-auto max-w-6xl px-4 pt-5 pb-32 sm:px-6 lg:px-10 lg:pt-9 lg:pb-12">
+        <main key={`${route}/${section ?? ""}`} className="page-in mx-auto max-w-6xl px-4 pt-5 pb-32 sm:px-6 lg:px-10 lg:pt-9 lg:pb-12">
           <Page />
         </main>
 

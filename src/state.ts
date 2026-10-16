@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { TxType } from "./lib/db";
+import type { MemberSummary, TxType } from "./lib/db";
 import type { FinanceData } from "./lib/hooks";
 
 export interface TransactionRequest {
@@ -25,6 +25,12 @@ export interface AppState {
   toggleHidden: () => void;
   openTransaction: (request?: TransactionRequest) => void;
   notify: (message: string, action?: Toast["action"]) => void;
+  /** True when the active space is shared, so entries carry a holder. */
+  sharedSpace: boolean;
+  members: MemberSummary[];
+  memberById: Map<string, MemberSummary>;
+  /** Signed-in user, used as the default holder for new shared entries. */
+  currentUserId: string | null;
 }
 
 export const AppContext = createContext<AppState | null>(null);

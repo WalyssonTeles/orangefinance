@@ -1,29 +1,33 @@
 # Orange Finance — Funcionalidades do app
 
-> **Versão 0.1.0 · Fase 1 (local)**
+> **Versão 1.0.0**
 > Este arquivo descreve o que o app **já faz hoje**.
 > No final há um espaço para você escrever as funcionalidades que deseja nas próximas versões.
+> A versão anterior está salva no GitHub na tag `v0.1.0`.
 
 ---
 
 ## 1. Visão geral
 
-O Orange Finance é um app de gestão financeira pessoal, irmão do Orange Notes. Ele funciona no navegador do computador e do celular e pode ser **instalado como aplicativo** (PWA). Nesta fase:
+O Orange Finance é um app de gestão financeira pessoal, irmão do Orange Notes. Ele funciona no navegador do computador e do celular e pode ser **instalado como aplicativo** (PWA).
 
-- tudo funciona **sem internet**;
-- os dados ficam salvos **apenas no dispositivo/navegador** em que foram cadastrados;
-- **não há login, servidor nem sincronização** (planejado para uma próxima fase).
+- Tudo funciona **sem internet**; os dados ficam salvos no aparelho.
+- Opcionalmente, **Entrar com Google** sincroniza os dados entre aparelhos pelo Supabase.
+- Cada conta tem um espaço **Pessoal** e pode participar de **espaços compartilhados** (ex.: família).
 
 ---
 
 ## 2. Início (painel)
 
-- Saudação de acordo com o horário (“Bom dia”, “Boa tarde”, “Boa noite”) e com o nome configurado em Ajustes.
+- Saudação de acordo com o horário e com o nome definido em **Ajustes → Perfil**.
+- **Seletor de espaço**: ao lado do nome do espaço, a seta para baixo abre a lista de espaços (Pessoal e compartilhados) para trocar, além do atalho **Gerenciar espaços**.
 - **Seletor de mês**: setas para navegar e clique no nome do mês para voltar ao mês atual. O mês escolhido vale para Início, Lançamentos e Orçamentos.
 - **Cartão de saldo**:
   - **Saldo em contas** — soma das contas (sem os cartões de crédito), considerando apenas o que já foi pago/recebido;
   - **Previsto para o fim do mês** — saldo somando também os lançamentos pendentes até o último dia do mês;
   - **Receitas** e **Despesas** do mês.
+  - O cartão é clicável: o **saldo** abre Lançamentos com tudo (entradas e saídas), **Receitas** abre só as receitas e **Despesas** só as despesas do mês.
+- **Por pessoa** (espaços compartilhados): receitas, despesas e resultado do mês de cada participante, além de “Sem titular”.
 - **Gastos por categoria**: gráfico de rosca com as 5 maiores categorias, percentual e valor de cada uma, além do total de “Outras categorias”.
 - **Contas a pagar**: despesas pendentes até o fim do mês, com destaque para **atrasadas** e **vencendo hoje**. Um clique no círculo marca como pago (com opção **Desfazer**).
 - **Orçamentos**: os 4 orçamentos mais próximos do limite, com barra de progresso.
@@ -47,7 +51,9 @@ O Orange Finance é um app de gestão financeira pessoal, irmão do Orange Notes
   - **Mensal** — repete o mesmo valor por N meses (ex.: aluguel, assinaturas).
   - Apenas o primeiro lançamento usa o status escolhido; os próximos ficam pendentes.
 - Validação com mensagens claras (valor zerado, categoria não escolhida, transferência para a mesma conta etc.).
-- Editar um lançamento de uma série altera só aquele lançamento.
+- **Editar séries**: ao salvar um lançamento parcelado ou mensal, escolha **Só este** ou **Este e os próximos**. Todos os dados mudam (valor, descrição, categoria, conta, observações, titular). Nos próximos, o status pago/pendente é mantido e uma nova data preserva a repetição mensal (ex.: dia 10 → dia 15 em todos os meses seguintes).
+- **Titular** (espaços compartilhados): indica a quem pertence a receita ou despesa. Por padrão é quem lança, mas pode ser outro participante ou “Sem titular”.
+- O formulário mostra em qual espaço o lançamento será salvo.
 
 ### Excluir
 - Confirmação antes de excluir.
@@ -58,8 +64,13 @@ O Orange Finance é um app de gestão financeira pessoal, irmão do Orange Notes
 - Agrupada por dia (“Hoje”, “Ontem”, “Quinta-feira, 22 de outubro”…).
 - Resumo do mês: **Receitas**, **Despesas** e **Resultado**.
 - **Busca** por descrição, categoria ou observação (ignora acentos e maiúsculas).
-- Filtros por tipo (**Todos, Despesas, Receitas, Transferências, Pendentes**), por **conta** e por **categoria**, com botão **Limpar filtros**.
-- Cada item mostra ícone da categoria, conta, selo de parcela/mensal, valor e status (**Pago**, **Recebido**, **Pendente** ou **Atrasado**). Clicar no status alterna entre pago e pendente.
+- Filtros por tipo (**Todos, Despesas, Receitas, Transferências, Pendentes**), por **conta** e por **categoria**, com botão **Limpar filtros**. O filtro de categoria lista **só as categorias presentes nos lançamentos da tela** (mês, tipo e pessoa escolhidos).
+- **Por pessoa** (espaços compartilhados): ver tudo junto ou apenas os lançamentos de um participante; o resumo do mês acompanha o filtro.
+- Cada item mostra ícone da categoria, titular (em espaços compartilhados), conta, selo de parcela/mensal, valor e etiqueta de status: **verde** quando pago/recebido e **vermelha** quando pendente ou atrasado.
+- **O item inteiro é clicável** e abre o lançamento.
+- **Computador**: ao passar o mouse (ou navegar com Tab), aparecem os botões **relógio** (marcar pendente) ou **check** (marcar pago) e **lixeira** (excluir).
+- **Celular**: deslize o item para a esquerda para abrir a gaveta com **Pago/Pendente** e **Excluir**, como nos apps de e-mail. Tocar no item aberto fecha a gaveta.
+- Excluir pela lista pergunta **Só este / Este e os próximos** em séries; todas as ações oferecem **Desfazer**.
 
 ---
 
@@ -91,20 +102,26 @@ O Orange Finance é um app de gestão financeira pessoal, irmão do Orange Notes
 
 ## 6. Ajustes
 
-- **Nome** usado na saudação.
-- **Ocultar valores ao abrir o app** (privacidade). O botão de olho também oculta e mostra os valores a qualquer momento.
+A tela Ajustes mostra um **menu**; cada item abre sua própria tela, com o botão **← Ajustes** para voltar.
+
+- **Perfil**: nome (usado na saudação e mostrado aos participantes dos espaços compartilhados), sexo e data de nascimento. Sexo e data são opcionais e visíveis apenas para você. Com login, o perfil acompanha a conta em todos os aparelhos.
+- **Conta e sincronização**: entrar com Google, status da sincronização, resolução de conflitos e sair da conta.
+- **Espaço compartilhado**:
+  - lista dos espaços compartilhados e os botões **Criar novo** e **Inserir código**;
+  - dentro de um espaço: **código de 10 caracteres** (letras e números sem caracteres ambíguos) com botão **Copiar**, e a lista de participantes pelo nome definido no Perfil de cada um;
+  - o responsável pode **gerar um novo código** (o anterior deixa de funcionar) e **remover participantes**; participantes podem **sair do espaço**;
+  - por segurança, há limite de tentativas com códigos inválidos.
+- **Preferências**: ocultar valores ao abrir o app (privacidade). O botão de olho também oculta e mostra os valores a qualquer momento.
 - **Categorias**: 12 de despesa e 5 de receita já vêm prontas. É possível criar, renomear, trocar ícone (26 opções) e cor (14 opções) e excluir as que não são usadas em lançamentos.
-- **Backup**:
-  - **Exportar** todos os dados em um arquivo `.json`;
-  - **Importar** um backup, substituindo os dados atuais após confirmação.
-- **Apagar todos os dados** do dispositivo, com confirmação.
-- Versão do app.
+- **Backup e dados**: exportar e importar o espaço aberto em `.json` e apagar todos os dados, com confirmação.
+- Versão do app no fim do menu.
 
 ---
 
 ## 7. Aparência e uso
 
 - Identidade visual Orange: fundo creme, laranja como destaque, tipografia Bricolage Grotesque e Figtree, logo da laranja com gomos em forma de gráfico.
+- **Ícone e nome do app** no cabeçalho levam à tela inicial.
 - **Computador**: menu lateral fixo.
 - **Celular**: barra superior com ocultar valores e Ajustes; barra inferior com Início, Lançamentos, botão **+**, Contas e Orçamentos.
 - Formulários como **folha inferior** no celular e **janela central** no computador. **Esc** fecha.
@@ -115,24 +132,65 @@ O Orange Finance é um app de gestão financeira pessoal, irmão do Orange Notes
 
 ---
 
-## 8. Limitações conhecidas desta fase
+## 8. Limitações conhecidas
 
-- Os dados **não sincronizam** entre dispositivos. Cada navegador/celular tem seus próprios dados. Use **Exportar/Importar backup** para transferi-los manualmente.
-- Limpar os dados do navegador apaga os dados do app. Faça backups.
+- Limpar os dados do navegador apaga a cópia local. Com login, os dados voltam da nuvem; sem login, faça backups.
 - A fatura do cartão é o saldo acumulado do cartão. Ainda **não há dia de fechamento e vencimento** nem separação por fatura mensal.
-- Editar uma série altera só o lançamento escolhido. Ainda não há opção “alterar este e os próximos”.
+- Lançamentos criados antes da 1.0 em espaços compartilhados aparecem como “Sem titular” até serem editados.
+- Quem tiver o código de um espaço compartilhado pode entrar nele. Compartilhe o código por meio privado e gere um novo se necessário.
 - Não há relatórios avançados, metas, anexos de comprovantes nem importação de extratos.
 
 ---
 
-## 9. Funcionalidades desejadas ✍️
+## 9. Histórico de versões
+
+- **1.0.0** — edição de séries (“só este” ou “este e os próximos”), cartão do início clicável, filtro de categorias por tela, cabeçalho leva ao início, Ajustes em menu, Perfil, titular e relatórios por pessoa, espaços compartilhados com código de 10 caracteres, seletor de espaço no início e ações rápidas nos lançamentos (hover no computador e gaveta no celular). Atualização compatível: nenhum dado existente é apagado.
+- **0.1.0** — app local, login com Google, sincronização e espaços familiares.
+
+---
+
+## 10. Funcionalidades desejadas ✍️
 
 > Escreva abaixo o que você quer que o Orange Finance faça. Pode ser em tópicos simples — depois transformamos em tarefas.
 > Dica: indique a prioridade com **(alta)**, **(média)** ou **(baixa)**.
 
+### Versão 1.0 (usabilidade) — ✅ implementada
+
+> Requisito geral: a atualização **não pode apagar nem alterar** os dados atuais dos usuários (lançamentos, contas, categorias, orçamentos, espaços e sincronização).
+
+#### Editar gastos recorrentes
+Ter a opção de editar os gastos/receitas recorrentes. Exemplo: uma despesa que se repete todo mês, mas no terceiro mês muda o valor. Poder mudar no app e escolher alterar **apenas esse** ou **este e os próximos**. Não só o valor: todos os demais dados também, igual já existe para excluir.
+
+#### Tela inicial — Card em destaque
+Na tela inicial, ao clicar no card em destaque: clicar em **Despesas** mostra as despesas; clicar em **Receitas** mostra as receitas; clicar no **total** mostra a tela com tudo, entradas e saídas.
+
+#### Tela de lançamentos — filtro de categorias
+Na opção de filtrar categorias, exibir só as categorias disponíveis nesta tela.
+
+#### Ícone do Header
+Clicar no ícone e no nome do app no cabeçalho leva para a tela inicial.
+
+#### Ajustes — menu em profundidade
+Não expor todas as opções de uma vez. Mostrar um menu que leva a telas próprias, por exemplo: Conta e sincronização, Backup, Preferências do espaço, Categorias.
+
+#### Ajustes — Perfil
+Área de perfil com nome do usuário, sexo e data de nascimento.
+
+#### Espaço compartilhado — titular dos lançamentos
+No espaço compartilhado, apontar a quem pertence cada despesa ou receita, para gerar relatórios por pessoa e com tudo. Exemplo: eu lanço meu salário e me marco como titular; minha esposa lança os rendimentos e despesas dela e se marca como titular (ou me marca, se lançar algo por mim). Nos lançamentos posso ver tudo junto ou por pessoa, inclusive quando houver mais pessoas vinculadas.
+
+#### Espaço compartilhado — gerenciamento e código de acesso
+Item **Espaço compartilhado** em Ajustes, com a lista de espaços e os botões **Criar novo** e **Inserir código**. Dentro de um espaço existente: código de **10 caracteres** (como no Among Us) com botão de copiar, para outras pessoas entrarem, e a lista de participantes pelo nome que cada pessoa definiu no próprio app.
+
+Na tela inicial, ao lado do nome do espaço, um botão com seta para baixo abre a lista de espaços disponíveis para trocar.
+
+#### Tela de lançamentos — ações nos itens
+Todo o item é clicável e abre o lançamento. No computador, ao passar o mouse, aparecem os botões de **lixeira** (excluir) e de **relógio** (marcar pendente) ou **check** (marcar pago). No celular, essas opções aparecem como uma gaveta ao deslizar o item para a esquerda, como nos apps de e-mail.
+
+A etiqueta de status fica com fundo **vermelho** quando pendente e **verde** quando paga.
+
 ### Próximas funcionalidades
 
--
 -
 -
 

@@ -12,6 +12,7 @@ import {
   parseBackup,
   restoreTransactions,
   seedDefaults,
+  updateTransaction,
 } from "./repo";
 
 let db: FinanceDB;
@@ -85,5 +86,51 @@ describe("repository", () => {
   it("rejects files that are not Orange Finance backups", () => {
     expect(() => parseBackup("{}")).toThrow(/não é um backup/);
     expect(() => parseBackup("nope")).toThrow(/JSON válido/);
+  });
+
+  it("edits only one entry of a series by default", async () => {
+    const ids = await createTransaction(await draft(), { mode: "monthly", count: 4 }, db);
+    expect(await updateTransaction(ids[2], { amount: 150_00 }, "one", db)).toEqual([ids[2]]);
+    const amounts = (await db.transactions.bulkGet(ids)).map((t) => t!.amount);
+    expect(amounts).toEqual([120_00, 120_00, 150_00, 120_00]);
+  });
+
+  it("edits this and the following entries with every field except paid, keeping the monthly cadence", async () => {
+    const ids = await createTransaction(await draft(), { mode: "monthly", count: 4 }, db);
+    const other = (await db.categories.where("kind").equals("expense").toArray())[1];
+    const changed = await updateTransaction(ids[1], {
+      amount: 180_00, description: "Aluguel novo", categoryId: other.id, notes: "reajuste", date: "2026-02-15", paid: true,
+    }, "following", db);
+    expect([...changed].sort()).toEqual(ids.slice(1).sort());
+    const items = (await db.transactions.bulkGet(ids)).map((t) => t!);
+    expect(items.map((t) => t.amount)).toEqual([120_00, 180_00, 180_00, 180_00]);
+    expect(items.map((t) => t.description)).toEqual(["Geladeira", "Aluguel novo", "Aluguel novo", "Aluguel novo"]);
+    expect(items.map((t) => t.categoryId)).toEqual([items[0].categoryId, other.id, other.id, other.id]);
+    expect(items.map((t) => t.date)).toEqual(["2026-01-31", "2026-02-15", "2026-03-15", "2026-04-15"]);
+    expect(items.map((t) => t.paid)).toEqual([true, true, false, false]);
+    expect(new Set(items.map((t) => t.groupId)).size).toBe(1);
+  });
+
+  it("does not touch deleted or previous entries when editing the following ones", async () => {
+    const ids = await createTransaction(await draft(100_00), { mode: "installments", count: 4 }, db);
+    await deleteTransaction(ids[3], "one", db);
+    await updateTransaction(ids[1], { amount: 50_00 }, "following", db);
+    const items = (await db.transactions.bulkGet(ids)).map((t) => t!);
+    expect(items.map((t) => t.amount)).toEqual([2500, 50_00, 50_00, 2500]);
+  });
+
+  it("imports backups from version 0.1 that have no holder field", async () => {
+    await createTransaction(await draft(), undefined, db);
+    const legacy = JSON.parse(JSON.stringify(await exportBackup(db)));
+    for (const tx of legacy.transactions) delete tx.holderId;
+    const backup = parseBackup(JSON.stringify(legacy));
+    expect(backup.transactions[0].holderId).toBeNull();
+  });
+
+  it("keeps fields unknown to this version when parsing backups", async () => {
+    await createTransaction(await draft(), undefined, db);
+    const future = JSON.parse(JSON.stringify(await exportBackup(db)));
+    future.transactions[0].futureField = "preserved";
+    expect((parseBackup(JSON.stringify(future)).transactions[0] as unknown as Record<string, unknown>).futureField).toBe("preserved");
   });
 });

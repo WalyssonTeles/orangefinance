@@ -73,7 +73,7 @@ O mesmo link funciona em celulares, tablets e computadores. Em **Ajustes → Con
 - A sincronização envia alterações locais após uma breve espera e consulta a nuvem a cada **15 segundos** enquanto o app está visível, além de retomar ao reconectar ou reabrir.
 - Offline, as alterações ficam no IndexedDB e são reconciliadas ao retornar. O navegador pode suspender o app fechado; não há execução contínua em segundo plano.
 - Alterações em registros diferentes são mescladas. Se o mesmo registro mudar de formas diferentes em dois aparelhos, o envio pausa e **Ajustes** permite comparar as versões e escolher qual manter para os registros em conflito. Horários dos dispositivos não são usados para decidir quem vence.
-- Nome exibido no espaço, contas, categorias, lançamentos e orçamentos são sincronizados. A preferência de ocultar valores permanece local.
+- Perfil, contas, categorias, lançamentos e orçamentos são sincronizados. A preferência de ocultar valores permanece local.
 - Importar backup e apagar os dados também são alterações sincronizáveis; essas ações afetam a nuvem e os outros aparelhos depois de sincronizar.
 - Ao sair, os dados locais pendentes são preservados e a interface fica bloqueada até entrar na mesma conta. Para outra conta, use outro perfil do navegador. Esse bloqueio não criptografa o IndexedDB; proteja o aparelho e o perfil com bloqueio de tela.
 
@@ -88,16 +88,18 @@ Exporte também um backup antes de trocar de navegador, limpar os dados do site 
 
 ### Finanças pessoais e familiares
 
-Cada e-mail possui um espaço **Pessoal**, que não pode receber convidados. Em **Ajustes → Espaço financeiro**, crie um espaço familiar separado, por exemplo “Nossa família”. O espaço novo começa com categorias e uma conta inicial, **sem copiar as finanças pessoais**.
+Cada conta possui um espaço **Pessoal**, que não pode receber participantes. Em **Ajustes → Espaço compartilhado → Criar novo**, crie um espaço separado, por exemplo “Nossa família”. O espaço novo começa com categorias e uma conta inicial, **sem copiar as finanças pessoais**. Na tela inicial, a seta ao lado do nome do espaço troca entre Pessoal e os compartilhados.
 
 Para compartilhar com sua esposa:
 
-1. Entre no espaço familiar, informe o e-mail dela em **E-mail de quem deseja convidar** e gere o convite.
-2. Copie o código e envie por um meio privado. O convite não é enviado automaticamente por e-mail.
-3. Ela entra com a própria conta Google (usando o e-mail indicado no convite). O espaço pessoal é preparado automaticamente; depois, ela cola o **código de convite familiar** em Ajustes. Esse código de convite não é um código de login.
-4. Os dois passam a ver e editar o mesmo espaço familiar. Cada um mantém seu espaço Pessoal privado e pode alternar pelo seletor.
+1. Abra o espaço em **Ajustes → Espaço compartilhado** e toque em **Copiar** ao lado do código de **10 caracteres**.
+2. Envie o código por um meio privado.
+3. Ela entra com a própria conta Google, abre **Ajustes → Espaço compartilhado → Inserir código** e cola o código.
+4. Os dois passam a ver e editar o mesmo espaço. Cada um mantém o Pessoal privado e aparece para o outro pelo nome definido em **Ajustes → Perfil**.
 
-O convite só funciona para o e-mail confirmado indicado, expira em sete dias e só pode ser aceito uma vez. Somente o responsável cria/cancela convites ou remove participantes. Participantes podem sair, mas o responsável não pode sair do próprio espaço. Todos os membros podem alterar e apagar dados financeiros **do espaço compartilhado**.
+Nos espaços compartilhados, cada lançamento tem um **Titular** (por padrão, quem lançou). Em Lançamentos é possível ver tudo junto ou por pessoa, e o início mostra o resumo **Por pessoa**.
+
+Quem tiver o código pode entrar no espaço, então trate-o como uma senha. O responsável pode **gerar um novo código** (o anterior para de funcionar) e remover participantes; há limite de 10 tentativas inválidas por hora por conta. Participantes podem sair, mas o responsável não pode sair do próprio espaço. Todos os membros podem alterar e apagar dados financeiros **do espaço compartilhado**. Sexo e data de nascimento do Perfil nunca são mostrados aos outros participantes.
 
 A troca de espaços guarda alterações pendentes em caches separados; elas serão enviadas quando você voltar ao espaço correspondente e houver internet. O backup exportado contém apenas o espaço ativo. Não importe um backup pessoal dentro do espaço familiar sem querer compartilhar aquele conteúdo.
 
@@ -108,8 +110,8 @@ Revogar um acesso bloqueia novas leituras e escritas no servidor; a lista de esp
 Este projeto é **Vite/React**, não Next.js. Não usa `@supabase/ssr`, middleware, cookies de servidor nem variáveis `NEXT_PUBLIC_*`.
 
 1. No Supabase, mantenha **Data API** habilitada, desative **Automatically expose new tables** e ative **automatic RLS**.
-2. No **SQL Editor**, execute em ordem [a migração inicial](./supabase/migrations/202610150001_finance_sync.sql) e [a migração de espaços pessoais/familiares](./supabase/migrations/202610150002_workspaces.sql). A segunda cria os espaços, participações e convites, com uma linha financeira JSON por espaço, revisão atômica e limite de 5 MB. Dados da tabela inicial são copiados para o espaço pessoal do proprietário na primeira conexão. Leituras exigem autenticação e RLS; as funções conferem a identidade/participação no servidor. A migração inicial sozinha não basta para esta versão.
-3. Opcionalmente, execute [os testes SQL de usuários](./supabase/tests/rls.sql) e [os testes de espaços/convites](./supabase/tests/workspaces.sql) no SQL Editor. Eles validam isolamento, revisão concorrente, convite por e-mail, revogação e bloqueio anônimo. Criam registros de teste dentro de transações revertidas ao final. O resultado esperado é `PASS`. Os mesmos scripts são executados automaticamente nos testes unitários em PostgreSQL local via PGlite, sem usar contas ou dados reais.
+2. No **SQL Editor**, execute em ordem [a migração inicial](./supabase/migrations/202610150001_finance_sync.sql), [a migração de espaços pessoais/familiares](./supabase/migrations/202610150002_workspaces.sql) e [a migração da versão 1.0](./supabase/migrations/202610160001_v1.sql). As duas primeiras criam os espaços e participações, com uma linha financeira JSON por espaço, revisão atômica e limite de 5 MB. A 1.0 é **somente aditiva**: cria perfis, códigos de 10 caracteres (inclusive para espaços já existentes) com limite de tentativas e a função de gravação `write_workspace_finance_v2`. Ela também revoga a gravação antiga, para que aparelhos ainda na versão 0.1 não sobrescrevam dados da 1.0; esses aparelhos mantêm as alterações localmente até atualizar o app. **Execute a migração 1.0 antes de publicar o código 1.0.** Leituras exigem autenticação e RLS; as funções conferem a identidade/participação no servidor.
+3. Opcionalmente, execute [os testes SQL de usuários](./supabase/tests/rls.sql) e [os testes de espaços/convites](./supabase/tests/workspaces.sql) **antes** da migração 1.0, e [os testes da 1.0](./supabase/tests/v1.sql) depois dela. Eles validam isolamento, revisão concorrente, códigos, limite de tentativas, privacidade do perfil, revogação e bloqueio anônimo. Criam registros de teste dentro de transações revertidas ao final. O resultado esperado é `PASS`. Os mesmos scripts são executados automaticamente nos testes unitários em PostgreSQL local via PGlite, inclusive a atualização de um banco com dados existentes, sem usar contas ou dados reais.
 4. Configure o provedor **Google** conforme a seção abaixo. O login usa OAuth/PKCE e não depende de SMTP ou da edição dos modelos de e-mail. Mantenha novos cadastros habilitados para permitir o primeiro acesso de cada pessoa.
 5. Copie `.env.example` para `.env.local` e preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`. Reinicie o servidor local após alterar variáveis.
 6. Para o GitHub Pages, crie as mesmas duas **Repository variables** em **Settings → Secrets and variables → Actions → Variables** e execute novamente a publicação. A configuração de ambiente é incorporada durante o build; o arquivo `.env.local` não é enviado ao GitHub.

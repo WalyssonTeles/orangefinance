@@ -96,8 +96,47 @@ export async function createTransaction(
   return items.map((t) => t.id);
 }
 
-export async function updateTransaction(id: string, changes: Partial<TransactionDraft>, database: FinanceDB = db) {
-  await database.transactions.update(id, { ...changes, updatedAt: stamp() });
+export type SeriesScope = "one" | "following";
+
+function monthIndex(iso: string): number {
+  const [y, m] = iso.split("-").map(Number);
+  return y * 12 + m;
+}
+
+/** Items of the same series from `tx` onwards (by installment number, falling back to date). */
+async function followingInSeries(tx: Transaction, database: FinanceDB): Promise<Transaction[]> {
+  if (!tx.groupId) return [tx];
+  const siblings = await database.transactions.where("groupId").equals(tx.groupId).toArray();
+  return siblings.filter((t) => t.deletedAt === null && (
+    t.installment !== null && tx.installment !== null ? t.installment >= tx.installment : t.date >= tx.date
+  ));
+}
+
+/**
+ * Updates one entry or this and the following entries of its series. For the following entries,
+ * every field changes except the paid status, and a new date keeps the monthly cadence.
+ */
+export async function updateTransaction(
+  id: string, changes: Partial<TransactionDraft>, scope: SeriesScope = "one", database: FinanceDB = db,
+): Promise<string[]> {
+  return database.transaction("rw", database.transactions, async () => {
+    const tx = await database.transactions.get(id);
+    if (!tx) return [];
+    const now = stamp();
+    if (scope === "one" || !tx.groupId) {
+      await database.transactions.update(id, { ...changes, updatedAt: now });
+      return [id];
+    }
+    const { paid: _paid, date, id: _id, ...shared } = changes;
+    const targets = await followingInSeries(tx, database);
+    await database.transactions.bulkUpdate(targets.map((t) => ({
+      key: t.id,
+      changes: t.id === tx.id
+        ? { ...changes, updatedAt: now }
+        : { ...shared, date: date ? addMonths(date, monthIndex(t.date) - monthIndex(tx.date)) : t.date, updatedAt: now },
+    })));
+    return targets.map((t) => t.id);
+  });
 }
 
 export async function setPaid(id: string, paid: boolean, database: FinanceDB = db) {
@@ -105,15 +144,10 @@ export async function setPaid(id: string, paid: boolean, database: FinanceDB = d
 }
 
 /** Soft-deletes a transaction (and, optionally, the following ones of the same series). Returns affected ids. */
-export async function deleteTransaction(id: string, scope: "one" | "following" = "one", database: FinanceDB = db) {
+export async function deleteTransaction(id: string, scope: SeriesScope = "one", database: FinanceDB = db) {
   const tx = await database.transactions.get(id);
   if (!tx) return [];
-  let targets = [tx];
-  if (scope === "following" && tx.groupId) {
-    targets = (await database.transactions.where("groupId").equals(tx.groupId).toArray()).filter(
-      (t) => t.deletedAt === null && t.date >= tx.date,
-    );
-  }
+  const targets = scope === "following" ? await followingInSeries(tx, database) : [tx];
   const now = stamp();
   await database.transactions.bulkUpdate(targets.map((t) => ({ key: t.id, changes: { deletedAt: now, updatedAt: now } })));
   return targets.map((t) => t.id);

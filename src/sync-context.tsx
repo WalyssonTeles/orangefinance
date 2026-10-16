@@ -10,7 +10,8 @@ import { googleSignInUrl, oauthRedirectUrl } from "./lib/google-auth";
 import {
   connectSync, supabaseRemote, switchWorkspace, syncOnce, SyncConflict, type Resolution,
 } from "./lib/sync";
-import { fetchWorkspaces, type Workspace } from "./lib/workspaces";
+import { fetchMembers, fetchWorkspaces, type Workspace } from "./lib/workspaces";
+import { saveProfileLocally, syncProfile, type Profile } from "./lib/profile";
 import { SyncPanel } from "./components/SyncPanel";
 import { navigate } from "./lib/router";
 
@@ -29,6 +30,10 @@ interface SyncContextValue {
   activeSpace: Workspace | null;
   initialChoice: boolean;
   refreshSpaces(): Promise<void>;
+  refreshMembers(workspaceId: string): Promise<void>;
+  /** Runs a server request with the current session; throws when signed out or offline. */
+  withSession<T>(work: (client: NonNullable<typeof supabase>, token: string) => Promise<T>): Promise<T>;
+  saveProfile(input: Pick<Profile, "name" | "gender" | "birthDate">): Promise<void>;
   switchSpace(id: string): Promise<void>;
   signInWithGoogle(): Promise<void>;
   signOut(): Promise<void>;
@@ -80,6 +85,38 @@ export function SyncProvider({ children, initialAuthError = null }: { children: 
     if (sessionRef.current?.user.id !== current.user.id) return;
     await db.workspaceCatalog.put({ userId: current.user.id, spaces: list });
   }, []);
+
+  const refreshMembers = useCallback(async (workspaceId: string) => {
+    const current = sessionRef.current;
+    if (!supabase || !current || !navigator.onLine) return;
+    const members = await fetchMembers(supabase, current.access_token, workspaceId);
+    if (sessionRef.current?.user.id !== current.user.id) return;
+    await db.workspaceMembers.put({ workspaceId, members });
+  }, []);
+
+  const refreshProfile = useCallback(async () => {
+    const current = sessionRef.current;
+    if (!supabase || !current || !navigator.onLine) return;
+    await syncProfile(supabase, current.access_token, current.user.id);
+  }, []);
+
+  const withSession = useCallback(async <T,>(work: (client: NonNullable<typeof supabase>, token: string) => Promise<T>) => {
+    const current = sessionRef.current;
+    if (!supabase || !current) throw new Error("Entre na sua conta para usar esta opção.");
+    if (!navigator.onLine) throw new Error("Conecte-se à internet para usar esta opção.");
+    return work(supabase, current.access_token);
+  }, []);
+
+  const sharedSpaceId = activeSpace?.kind === "shared" ? activeSpace.id : null;
+  useEffect(() => {
+    if (!sharedSpaceId || !online) return;
+    void refreshMembers(sharedSpaceId).catch(() => undefined);
+  }, [sharedSpaceId, online, refreshMembers]);
+
+  useEffect(() => {
+    if (!userId || !online) return;
+    void refreshProfile().catch(() => undefined);
+  }, [userId, online, refreshProfile]);
 
   useEffect(() => {
     if (!userId) return;
@@ -156,6 +193,8 @@ export function SyncProvider({ children, initialAuthError = null }: { children: 
     const catalogInterval = setInterval(() => {
       if (navigator.onLine && document.visibilityState === "visible") {
         void refreshSpaces().catch((cause: unknown) => setError(errorMessage(cause)));
+        if (sharedSpaceId) void refreshMembers(sharedSpaceId).catch(() => undefined);
+        void refreshProfile().catch(() => undefined);
       }
     }, 60_000);
     return () => {
@@ -165,7 +204,7 @@ export function SyncProvider({ children, initialAuthError = null }: { children: 
       window.removeEventListener("offline", offline);
       document.removeEventListener("visibilitychange", resume);
     };
-  }, [synchronize, refreshSpaces]);
+  }, [synchronize, refreshSpaces, refreshMembers, refreshProfile, sharedSpaceId]);
 
   const action = useCallback(async (work: () => Promise<void>) => {
     setBusy(true);
@@ -207,9 +246,31 @@ export function SyncProvider({ children, initialAuthError = null }: { children: 
     void connect("auto");
   }, [userId, connection, personalSpaceId, online, connect]);
 
+  // The open shared space disappeared (left or removed): return to the personal space, keeping local data cached.
+  const activeMissing = bound && !!catalog && !activeSpace && !!personalSpaceId;
+  useEffect(() => {
+    if (!activeMissing || !supabase || !userId || !personalSpaceId || running.current) return;
+    const current = sessionRef.current;
+    if (!current) return;
+    running.current = true;
+    void switchWorkspace(userId, supabaseRemote(supabase, personalSpaceId, current.access_token))
+      .then(() => setMessage("Você não tem mais acesso ao espaço que estava aberto. Voltamos para o espaço Pessoal."))
+      .catch((cause: unknown) => setError(errorMessage(cause)))
+      .finally(() => { running.current = false; });
+  }, [activeMissing, userId, personalSpaceId]);
+
   const value = useMemo<SyncContextValue>(() => ({
     session, busy: busy || preparing, syncing, bound, wrongAccount, online, message, error, conflict, lastSynced,
-    synchronize, spaces, activeSpace, refreshSpaces, connect, initialChoice,
+    synchronize, spaces, activeSpace, refreshSpaces, refreshMembers, connect, initialChoice, withSession,
+    async saveProfile(input) {
+      const current = sessionRef.current;
+      await saveProfileLocally(input, current?.user.id ?? null);
+      if (current && navigator.onLine) {
+        await refreshProfile().catch(() => undefined);
+        const shared = activeSpace?.kind === "shared" ? activeSpace.id : null;
+        if (shared) await refreshMembers(shared).catch(() => undefined);
+      }
+    },
     async switchSpace(id) {
       await action(async () => {
         if (!supabase || !userId) throw new Error("Entre na sua conta primeiro.");
@@ -243,7 +304,7 @@ export function SyncProvider({ children, initialAuthError = null }: { children: 
         setMessage("Você saiu. Os dados locais foram mantidos e só serão exibidos após entrar novamente na mesma conta.");
       });
     },
-  }), [session, busy, preparing, syncing, bound, wrongAccount, online, message, error, conflict, lastSynced, synchronize, action, userId, spaces, activeSpace, refreshSpaces, connect, initialChoice]);
+  }), [session, busy, preparing, syncing, bound, wrongAccount, online, message, error, conflict, lastSynced, synchronize, action, userId, spaces, activeSpace, refreshSpaces, refreshMembers, refreshProfile, connect, initialChoice, withSession]);
 
   const locked = !!connection && !bound;
   return (
@@ -258,14 +319,9 @@ export function SyncProvider({ children, initialAuthError = null }: { children: 
       ) : (
         <>
           {bound && (!online || error) && (
-            <a href="#/ajustes" role="status" className="fixed left-0 right-0 top-0 z-50 block bg-orange-soft px-4 py-2 text-center text-sm text-brand-ink">
-              {!online ? "Sem internet. Alterações salvas neste aparelho; serão sincronizadas ao reconectar." : `${error} Toque para abrir Ajustes.`}
+            <a href="#/ajustes/conta" role="status" className="fixed left-0 right-0 top-0 z-50 block bg-orange-soft px-4 py-2 text-center text-sm text-brand-ink">
+              {!online ? "Sem internet. Alterações salvas neste aparelho; serão sincronizadas ao reconectar." : `${error} Toque para ver detalhes.`}
             </a>
-          )}
-          {bound && activeSpace && (
-            <div className="border-b border-line bg-orange-soft px-4 py-1 text-center text-xs font-semibold text-brand-ink">
-              {activeSpace.kind === "personal" ? "Pessoal" : "Familiar"}: {activeSpace.name} · Troque de espaço em <a className="underline" href="#/ajustes">Ajustes</a>
-            </div>
           )}
           <Fragment key={connection?.workspaceId ?? "local"}>{children}</Fragment>
         </>

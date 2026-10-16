@@ -36,7 +36,7 @@ export function supabaseRemote(client: SupabaseClient, workspaceId: string, acce
       if (new TextEncoder().encode(JSON.stringify(data)).length > 5_000_000) {
         throw new Error("Os dados excedem o limite de 5 MB por conta. Exporte um backup antes de continuar.");
       }
-      const { data: written, error } = await client.rpc("write_workspace_finance", {
+      const { data: written, error } = await client.rpc("write_workspace_finance_v2", {
         p_workspace: workspaceId, p_expected_revision: expectedRevision, p_data: data,
       }).setHeader("Authorization", `Bearer ${accessToken}`);
       if (error) throw new Error(`Não foi possível salvar na nuvem: ${error.message}`);
@@ -100,15 +100,17 @@ export async function syncOnce(
     }
     const cloud = await remote.read();
     if (!cloud) throw new Error("Os dados da conta foram removidos da nuvem. A cópia local foi preservada; exporte um backup.");
-    const merged = mergeSyncData(connection.base, local, cloud.data);
+    // Bases saved by older versions lack newer default fields; normalize them so they are not seen as edits.
+    const base = parseSyncData(connection.base);
+    const merged = mergeSyncData(base, local, cloud.data);
     let selected = merged.data;
     if (merged.conflicts.length) {
       if (!resolution || resolution.signature !== merged.signature) throw new SyncConflict(merged.conflicts, merged.signature);
-      selected = mergeSyncData(connection.base, local, cloud.data, resolution.choice).data;
+      selected = mergeSyncData(base, local, cloud.data, resolution.choice).data;
     }
     validateReferences(selected);
     const changed = stable(selected) !== stable(cloud.data);
-    if (!changed && stable(local) === stable(selected) && stable(connection.base) === stable(selected) &&
+    if (!changed && stable(local) === stable(selected) && stable(base) === stable(selected) &&
       connection.revision === cloud.revision) return;
     if (changed && !await remote.write(cloud.revision, selected)) continue;
     const applied = await database.transaction("rw", tables(database), async () => {
@@ -139,7 +141,7 @@ export async function switchWorkspace(
   if (!target || !data) {
     let cloud = await remote.read();
     if (!cloud) {
-      const initial: SyncData = { ...defaultRecords(), transactions: [], budgets: [], settings: [] };
+      const initial = parseSyncData({ ...defaultRecords(), transactions: [], budgets: [], settings: [] });
       if (!await remote.write(0, initial)) {
         cloud = await remote.read();
         if (!cloud) throw new Error("Não foi possível inicializar o espaço.");

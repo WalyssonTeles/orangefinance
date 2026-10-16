@@ -4,24 +4,51 @@ export type Route = "inicio" | "lancamentos" | "contas" | "orcamentos" | "ajuste
 
 const ROUTES: Route[] = ["inicio", "lancamentos", "contas", "orcamentos", "ajustes"];
 
-function read(): Route {
-  const name = window.location.hash.replace(/^#\/?/, "");
-  return (ROUTES as string[]).includes(name) ? (name as Route) : "inicio";
+export interface AppLocation {
+  route: Route;
+  /** Second path segment, e.g. "perfil" in #/ajustes/perfil. */
+  section: string | null;
+  params: URLSearchParams;
 }
 
-export function navigate(route: Route) {
-  window.location.hash = route === "inicio" ? "/" : `/${route}`;
+export function parseHash(hash: string): AppLocation {
+  const [path, query = ""] = hash.replace(/^#\/?/, "").split("?");
+  const [name, section] = path.split("/");
+  const route = (ROUTES as string[]).includes(name) ? (name as Route) : "inicio";
+  return { route, section: route === "inicio" ? null : section || null, params: new URLSearchParams(query) };
 }
 
-export function useRoute(): Route {
-  const [route, setRoute] = useState(read);
+export function routeHref(route: Route, section?: string | null, params?: Record<string, string>): string {
+  const path = route === "inicio" ? "" : section ? `${route}/${section}` : route;
+  const query = params && Object.keys(params).length ? `?${new URLSearchParams(params)}` : "";
+  return `#/${path}${query}`;
+}
+
+export function navigate(route: Route, section?: string | null, params?: Record<string, string>) {
+  window.location.hash = routeHref(route, section, params).slice(1);
+}
+
+/** Updates the URL without adding a history entry or triggering navigation. */
+export function replaceParams(route: Route, section: string | null, params: Record<string, string>) {
+  window.history.replaceState(window.history.state, "", routeHref(route, section, params));
+}
+
+export function useLocation(): AppLocation {
+  const [current, setLocation] = useState(() => parseHash(window.location.hash));
   useEffect(() => {
     const onChange = () => {
-      setRoute(read());
-      window.scrollTo({ top: 0 });
+      const next = parseHash(window.location.hash);
+      setLocation((previous) => {
+        if (previous.route !== next.route || previous.section !== next.section) window.scrollTo({ top: 0 });
+        return next;
+      });
     };
     window.addEventListener("hashchange", onChange);
     return () => window.removeEventListener("hashchange", onChange);
   }, []);
-  return route;
+  return current;
+}
+
+export function useRoute(): Route {
+  return useLocation().route;
 }

@@ -1,7 +1,8 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo } from "react";
-import { db, type Account, type Budget, type Category, type Transaction } from "./db";
+import { db, type Account, type Budget, type Category, type MemberSummary, type Transaction } from "./db";
 import { alive } from "./finance";
+import { readProfile, type Profile } from "./profile";
 
 const EMPTY: never[] = [];
 
@@ -40,4 +41,19 @@ export function useFinanceData(): FinanceData {
 export function useSetting<T>(key: string, fallback: T): T {
   const value = useLiveQuery(() => db.settings.get(key), [key]);
   return value === undefined ? fallback : (value.value as T);
+}
+
+/** Profile of the signed-in user (or the local one), falling back to the pre-1.0 name setting. */
+export function useProfile(userId: string | null): { profile: Profile | null; name: string; loading: boolean } {
+  const profile = useLiveQuery(() => readProfile(), []);
+  const legacyName = useSetting("userName", "");
+  const own = profile && (profile.userId === null || profile.userId === userId) ? profile : null;
+  return { profile: own, name: own?.name || (typeof legacyName === "string" ? legacyName : ""), loading: profile === undefined };
+}
+
+const NO_MEMBERS: MemberSummary[] = [];
+
+export function useMembers(workspaceId: string | null | undefined): MemberSummary[] {
+  const cache = useLiveQuery(async () => workspaceId ? await db.workspaceMembers.get(workspaceId) : undefined, [workspaceId]);
+  return cache?.members ?? NO_MEMBERS;
 }
