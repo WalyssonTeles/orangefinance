@@ -1,7 +1,7 @@
 import { CalendarDays, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { addDays, addMonths, calendarDays, currentMonth, isISODate, monthLabel, parseISODate, shiftMonth, shortMonthLabel, todayISO, yearPage } from "../lib/dates";
+import { addDays, addMonths, calendarDays, currentMonth, editDateInput, formatDateInput, isISODate, monthLabel, parseISODate, shiftMonth, shortMonthLabel, todayISO, yearPage } from "../lib/dates";
 import { Button, IconButton, inputClass } from "./ui";
 
 export function MonthPicker({ month, onChange, className = "" }: {
@@ -50,6 +50,8 @@ function CalendarPicker({ mode, value, onChange, className = "", label, min = "1
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const anchor = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const dateInput = useRef<HTMLInputElement>(null);
+  const dateCaret = useRef<number | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   const focusGrid = useRef(false);
   const years = yearPage(pageEnd);
@@ -57,6 +59,18 @@ function CalendarPicker({ mode, value, onChange, className = "", label, min = "1
   const monthEnabled = (candidate: string) => /^\d{4}-\d{2}$/.test(candidate) && candidate >= min.slice(0, 7) && candidate <= max.slice(0, 7);
   const yearEnabled = (candidate: number) => candidate >= Number(min.slice(0, 4)) && candidate <= Number(max.slice(0, 4));
   const dateEnabled = (candidate: string) => candidate >= min && candidate <= max;
+  const dateError = !value ? required ? "Informe uma data no formato DD/MM/AAAA." : ""
+    : !isISODate(value) ? "Informe uma data válida no formato DD/MM/AAAA."
+    : value < min ? `A data deve ser igual ou posterior a ${formatDateInput(min)}.`
+    : value > max ? `A data deve ser igual ou anterior a ${formatDateInput(max)}.` : "";
+  useEffect(() => { dateInput.current?.setCustomValidity(dateError); }, [dateError]);
+  const restoreDateCaret = () => {
+    const input = dateInput.current;
+    const caret = dateCaret.current;
+    dateCaret.current = null;
+    if (input && caret !== null && document.activeElement === input) input.setSelectionRange(caret, caret);
+  };
+  useLayoutEffect(restoreDateCaret);
   const choose = (candidate: string) => { onChange(candidate); setOpen(false); };
   const changeMonth = (candidate: string) => {
     setVisibleMonth(candidate);
@@ -65,6 +79,7 @@ function CalendarPicker({ mode, value, onChange, className = "", label, min = "1
     setFocusedDate(next < min ? min : next > max ? max : next);
   };
   const show = () => {
+    if (dateMode) dateInput.current?.blur();
     const initial = dateMode ? currentMonth() : value;
     const month = initial < min.slice(0, 7) ? min.slice(0, 7) : initial > max.slice(0, 7) ? max.slice(0, 7) : initial;
     setVisibleMonth(month);
@@ -144,12 +159,30 @@ function CalendarPicker({ mode, value, onChange, className = "", label, min = "1
   return (
     <div ref={anchor} className={dateMode ? `min-w-0 ${className}` : `inline-flex h-11 min-w-0 items-center rounded-xl border border-line bg-surface ${className}`}>
       {!dateMode && <IconButton label="Mês anterior" onClick={() => onChange(shiftMonth(value, -1))}><ChevronLeft size={18} /></IconButton>}
-      <button ref={trigger} type="button" role={dateMode ? "combobox" : undefined} aria-label={dateMode ? label : undefined}
-        aria-required={dateMode ? required : undefined} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? `${id}-calendar` : undefined}
-        disabled={disabled} onClick={show}
-        className={dateMode ? `${inputClass} flex items-center justify-between gap-2 text-left disabled:cursor-not-allowed disabled:opacity-40` : "h-full min-w-0 flex-1 px-2 text-center text-[0.95rem] font-semibold sm:min-w-[9.5rem]"}>
-        {dateMode ? <><span className={value ? "" : "text-muted"}>{value ? value.split("-").reverse().join("/") : "DD/MM/AAAA"}</span><CalendarDays size={18} className="shrink-0 text-muted" aria-hidden="true" /></> : monthLabel(value)}
-      </button>
+      {dateMode ? <div className="relative">
+        <input ref={dateInput} type="text" aria-label={label} inputMode="numeric" autoComplete="off"
+          placeholder="DD/MM/AAAA" maxLength={10} required={required} disabled={disabled}
+          value={formatDateInput(value)} aria-invalid={value && dateError ? true : undefined}
+          className={`${inputClass} pr-12 tabular-nums disabled:cursor-not-allowed disabled:opacity-40`}
+          onChange={(event) => {
+            const input = event.currentTarget;
+            const native = event.nativeEvent;
+            const inputType = "inputType" in native && typeof native.inputType === "string" ? native.inputType : "";
+            const edit = editDateInput(formatDateInput(value), input.value, input.selectionStart ?? input.value.length, inputType);
+            dateCaret.current = edit.caret;
+            onChange(edit.value);
+            requestAnimationFrame(restoreDateCaret);
+          }} />
+        <button ref={trigger} type="button" aria-label={`Abrir calendário: ${label}`} title="Abrir calendário"
+          aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? `${id}-calendar` : undefined}
+          disabled={disabled} onClick={show}
+          className="absolute inset-y-0 right-0 grid w-11 place-items-center rounded-r-xl text-muted hover:text-brand-ink focus-visible:outline-2 focus-visible:outline-orange disabled:cursor-not-allowed disabled:opacity-40">
+          <CalendarDays size={18} aria-hidden="true" />
+        </button>
+      </div> : <button ref={trigger} type="button" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? `${id}-calendar` : undefined}
+        disabled={disabled} onClick={show} className="h-full min-w-0 flex-1 px-2 text-center text-[0.95rem] font-semibold sm:min-w-[9.5rem]">
+        {monthLabel(value)}
+      </button>}
       {!dateMode && <IconButton label="Próximo mês" onClick={() => onChange(shiftMonth(value, 1))}><ChevronRight size={18} /></IconButton>}
       {open && createPortal(
         <div className="fixed inset-0 z-[60]" onKeyDown={onKey}>

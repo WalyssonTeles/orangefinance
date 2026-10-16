@@ -17,6 +17,38 @@ export function isISODate(iso: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(iso) && toISODate(parseISODate(iso)) === iso;
 }
 
+export function maskDateInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)].filter(Boolean).join("/");
+}
+
+export function formatDateInput(value: string): string {
+  return isISODate(value) ? value.split("-").reverse().join("/") : maskDateInput(value);
+}
+
+export function editDateInput(previous: string, entered: string, caret: number, inputType: string) {
+  let digits = entered.replace(/\D/g, "").slice(0, 8);
+  let before = entered.slice(0, caret).replace(/\D/g, "").length;
+  if (inputType.startsWith("delete") && entered !== previous && digits === previous.replace(/\D/g, "")) {
+    const index = inputType === "deleteContentBackward" ? before - 1 : before;
+    if (index >= 0 && index < digits.length) {
+      digits = digits.slice(0, index) + digits.slice(index + 1);
+      before = index;
+    }
+  }
+  const text = maskDateInput(digits);
+  const [day, month, year] = text.split("/");
+  const candidate = text.length === 10 ? `${year}-${month}-${day}` : text;
+  let position = 0;
+  let count = 0;
+  while (position < text.length && count < before) {
+    if (/\d/.test(text[position])) count++;
+    position++;
+  }
+  // Incomplete input must reach validation instead of retaining the previous saved date.
+  return { text, value: isISODate(candidate) ? candidate : text, caret: position };
+}
+
 /** "2026-10-15" → "2026-10" */
 export function monthOf(iso: string): string {
   return iso.slice(0, 7);

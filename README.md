@@ -101,6 +101,11 @@ Nos espaços compartilhados, cada lançamento tem um **Titular** (por padrão, q
 
 Na versão **1.1**, contas e cartões também podem ter um titular, sem alterar a titularidade dos lançamentos. O resumo por pessoa funciona como um comprovante com atalhos para os filtros de Lançamentos; gastos por categoria também abrem a lista filtrada. O seletor de período permite escolher meses e páginas de 12 anos, com tela cheia no celular. Os filtros têm labels visíveis e Ajustes tem um único retorno por nível, com alvo de toque ampliado.
 
+### Versão 1.2.1
+
+- Correção do Date Field: tocar na data permite digitação com teclado numérico e máscara **DD/MM/AAAA**; somente o botão com ícone abre o calendário.
+- A correção vale para lançamentos, lote, pagamento de faturas e nascimento. Datas incompletas ou impossíveis são rejeitadas, mantendo o formato ISO no armazenamento. Sem nova migração de banco.
+
 ### Versão 1.2
 
 - Atalhos do painel aplicam os filtros e rolam até o card dos lançamentos. Cartões também abrem sua lista filtrada.

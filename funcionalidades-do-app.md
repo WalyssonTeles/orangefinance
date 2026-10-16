@@ -1,6 +1,6 @@
 # Orange Finance — Funcionalidades do app
 
-> **Versão 1.2.0**
+> **Versão 1.2.1**
 > Este arquivo descreve o que o app **já faz hoje**.
 > No final há um espaço para você escrever as funcionalidades que deseja nas próximas versões.
 > As versões anteriores são preservadas nas tags `v0.1.0`, `v1.0.0` e `v1.1.0`.
@@ -75,7 +75,7 @@ O Orange Finance é um app de gestão financeira pessoal, irmão do Orange Notes
 - Descrição (opcional), categoria com ícone e cor, conta ou cartão, data (com atalhos **Hoje** e **Ontem**) e observações.
 - Status **Pago / Recebido** ou **Pendente**. Em novas despesas de cartão, o status é controlado pela fatura e a data é a da compra.
 - Descrição com sugestões de despesas anteriores por trecho digitado, sem autocompletar; seleção por mouse, toque ou setas e Enter.
-- Calendário de data próprio, em português e com a mesma identidade visual da home, também usado no lote, pagamento de faturas e nascimento. Abre no mês atual; semanas **D S T Q Q S S**, de domingo a sábado. Setas navegam os meses; tocar no mês abre **JAN–DEZ**, tocar no ano abre páginas de 12 anos. No celular abre em tela cheia, como o seletor da home; **Hoje** seleciona a data atual e **Limpar** aparece apenas nos campos opcionais.
+- Campo de data editável com teclado numérico e máscara **DD/MM/AAAA**. Tocar no texto não abre o calendário; somente o botão com ícone abre o seletor. Datas incompletas/impossíveis não são salvas. Calendário próprio, em português e com a identidade visual da home, também usado no lote, pagamento de faturas e nascimento. Abre no mês atual; semanas **D S T Q Q S S**, de domingo a sábado. Setas navegam os meses; tocar no mês abre **JAN–DEZ**, tocar no ano abre páginas de 12 anos. No celular abre em tela cheia, como o seletor da home; **Hoje** seleciona a data atual e **Limpar** aparece apenas nos campos opcionais.
 - **Repetição** (ao criar ou editar despesas e receitas; até 1.200 ocorrências):
   - **Única** — um lançamento;
   - **Parcelada** — divide o valor total em parcelas mensais, sem perder centavos, com o selo `2/10` em cada parcela;

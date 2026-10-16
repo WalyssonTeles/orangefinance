@@ -65,7 +65,7 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
   const managedCredit = credit && (!existing || !!existing.invoiceKey || existing.accountId !== accountId || existing.date !== date || recurrenceChanged);
   const selectedAccount = data.accountById.get(accountId);
   const cycleHint = (() => {
-    if (!credit || !selectedAccount || !date) return "";
+    if (!credit || !selectedAccount || !isISODate(date)) return "";
     if (existing?.invoiceKey && date === existing.date && accountId === existing.accountId) return `Vencimento da fatura: ${existing.invoiceDueDate?.split("-").reverse().join("/")}.`;
     try { return `Vencimento da fatura: ${cardCycle(selectedAccount, date).invoiceDueDate.split("-").reverse().join("/")}. Compras no fechamento entram na próxima fatura.`; }
     catch (error) { return error instanceof Error ? error.message : "Configure as datas do cartão em Contas."; }
