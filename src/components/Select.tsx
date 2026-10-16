@@ -6,13 +6,14 @@ import { inputClass } from "./ui";
 
 interface SelectOption { value: string; label: string }
 
-export function Select({ label, value, onChange, options, disabled = false, className = "" }: {
+export function Select({ label, value, onChange, options, disabled = false, className = "", fitOptions = false }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: readonly SelectOption[];
   disabled?: boolean;
   className?: string;
+  fitOptions?: boolean;
 }) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
@@ -79,12 +80,12 @@ export function Select({ label, value, onChange, options, disabled = false, clas
       <span className="min-w-0 truncate">{options[selected]?.label ?? "Selecione"}</span>
       <ChevronDown size={16} className="shrink-0 text-muted" aria-hidden="true" />
     </button>
-    {open && <DropdownMenu anchor={trigger} id={`${id}-list`} label={label} count={options.length} active={active} onDismiss={() => setOpen(false)}>
+    {open && <DropdownMenu anchor={trigger} id={`${id}-list`} label={label} count={options.length} active={active} fitOptions={fitOptions} onDismiss={() => setOpen(false)}>
       {options.map((option, index) => <li key={option.value} id={`${id}-${index}`} role="option" aria-selected={value === option.value}
         className={`${dropdownOptionClass} ${active === index ? "bg-orange-soft" : ""}`}
         onPointerMove={(event) => { if (event.pointerType === "mouse") setActive(index); }}
         onClick={() => choose(index)}>
-        <span className="min-w-0 flex-1 truncate">{option.label}</span>
+        <span data-option-label className="min-w-0 flex-1 truncate">{option.label}</span>
         {value === option.value && <Check size={16} className="shrink-0 text-orange" aria-hidden="true" />}
       </li>)}
     </DropdownMenu>}

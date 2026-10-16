@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import { Logo, Wordmark } from "./components/Logo";
 import { TransactionForm } from "./components/TransactionForm";
 import { BatchTransactions } from "./components/BatchTransactions";
+import { ToastNotice } from "./components/ToastNotice";
 import { IconButton } from "./components/ui";
 import { currentMonth } from "./lib/dates";
 import { useFinanceData, useMembers, useSetting } from "./lib/hooks";
@@ -48,13 +49,8 @@ export default function App() {
     setHidden(hideOnStart);
   }, [hideOnStart]);
 
-  useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => setToast(null), toast.action ? 6000 : 3500);
-    return () => clearTimeout(timer);
-  }, [toast]);
-
   const openTransaction = useCallback((req: TransactionRequest = {}) => setRequest(req), []);
+  const dismissToast = useCallback(() => setToast(null), []);
   const notify = useCallback<AppState["notify"]>((message, action) => setToast({ id: Date.now(), message, action }), []);
 
   useEffect(() => {
@@ -200,27 +196,7 @@ export default function App() {
         {request && <TransactionForm key={request.id ?? "new"} request={request} onClose={() => setRequest(null)} />}
         {batchOpen && <BatchTransactions onClose={() => setBatchOpen(false)} />}
 
-        {toast && (
-          <div
-            key={toast.id}
-            role="status"
-            className="toast-in fixed inset-x-4 bottom-24 z-[60] mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-sm text-white lg:bottom-6"
-          >
-            <span className="flex-1">{toast.message}</span>
-            {toast.action && (
-              <button
-                type="button"
-                className="font-bold text-orange"
-                onClick={() => {
-                  toast.action?.run();
-                  setToast(null);
-                }}
-              >
-                {toast.action.label}
-              </button>
-            )}
-          </div>
-        )}
+        {toast && <ToastNotice key={toast.id} toast={toast} onDismiss={dismissToast} />}
       </div>
     </AppContext.Provider>
   );

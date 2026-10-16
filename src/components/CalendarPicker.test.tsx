@@ -26,4 +26,21 @@ describe("Date Field display format", () => {
     expect(html).toMatch(/<button[^>]+aria-label="Abrir calendário: Data"[^>]+aria-haspopup="dialog"/);
     expect(html).not.toMatch(/<input[^>]+aria-haspopup/);
   });
+
+  it("shows the exact invalid date hint and associates it with a thicker red field", () => {
+    const html = renderToStaticMarkup(<DatePicker label="Data" value="33/15/1990" onChange={() => {}} />);
+    expect(html).toContain("Informe uma data válida");
+    expect(html).toContain('aria-invalid="true"');
+    expect(html).toMatch(/<input[^>]*aria-describedby="[^"]+-error"/);
+    expect(html).toContain("aria-[invalid=true]:border-2");
+    expect(html).toContain("aria-[invalid=true]:focus:border-negative");
+  });
+
+  it("does not show an error before an empty or incomplete field has been left", () => {
+    for (const value of ["", "16/1"]) {
+      const html = renderToStaticMarkup(<DatePicker label="Data" required value={value} onChange={() => {}} />);
+      expect(html).not.toContain('aria-invalid="true"');
+      expect(html).not.toContain("Informe uma data válida");
+    }
+  });
 });

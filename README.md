@@ -101,6 +101,17 @@ Nos espaços compartilhados, cada lançamento tem um **Titular** (por padrão, q
 
 Na versão **1.1**, contas e cartões também podem ter um titular, sem alterar a titularidade dos lançamentos. O resumo por pessoa funciona como um comprovante com atalhos para os filtros de Lançamentos; gastos por categoria também abrem a lista filtrada. O seletor de período permite escolher meses e páginas de 12 anos, com tela cheia no celular. Os filtros têm labels visíveis e Ajustes tem um único retorno por nível, com alvo de toque ampliado.
 
+### Versão 1.2.2
+
+- Somente os controles ativam campos, radios e switches; títulos e hints não encaminham cliques. Os nomes acessíveis são preservados. Na inicial, os valores com atalhos são link buttons, sem tornar o card inteiro clicável.
+- No Date Field, um clique posiciona o cursor; dois selecionam dia, mês ou ano e outro duplo clique na parte já selecionada marca a data inteira. Digitar substitui a seleção. Datas inválidas têm borda vermelha de 2 px e o hint **Informe uma data válida**.
+- Toast sempre no topo, por **5 segundos**, sem bloquear cliques na página. No mobile, arraste para os lados para dispensar; no desktop, use **X**, separado de **Desfazer** por uma área segura.
+- A lupa e a tecla de busca/Enter dos filtros encerram a digitação e rolam até os lançamentos filtrados.
+- Frequência vem antes da quantidade de ocorrências, com hints curtos que acompanham a data. Novas recorrências oferecem diária, semanal, quinzenal, mensal e anual; regras personalizadas antigas continuam válidas e editáveis, sem conversão automática.
+- No lote compartilhado, conta e destino de transferência exibem o titular. Os menus podem ampliar para caber o nome, alinhados à direita do campo ou à esquerda quando necessário.
+- O selo da recorrência ocupa uma terceira linha no item, com **Quinzenal** abreviado para não disputar espaço com os demais dados.
+- Sem nova migração de banco; dados, backups e faturas mantêm as regras da 1.2.1.
+
 ### Versão 1.2.1
 
 - Correção do Date Field: tocar na data permite digitação com teclado numérico e máscara **DD/MM/AAAA**; somente o botão com ícone abre o calendário.

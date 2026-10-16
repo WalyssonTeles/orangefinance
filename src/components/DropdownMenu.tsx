@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 
 export const dropdownOptionClass = "flex h-11 shrink-0 cursor-pointer items-center gap-2 px-3 text-left hover:bg-orange-soft";
 
-export function DropdownMenu({ anchor, id, label, count, active, onDismiss, children }: {
+export function DropdownMenu({ anchor, id, label, count, active, onDismiss, children, fitOptions = false }: {
   anchor: RefObject<HTMLElement | null>;
   id: string;
   label: string;
@@ -11,11 +11,24 @@ export function DropdownMenu({ anchor, id, label, count, active, onDismiss, chil
   active: number;
   onDismiss: () => void;
   children: ReactNode;
+  fitOptions?: boolean;
 }) {
   const menu = useRef<HTMLUListElement>(null);
   const dismiss = useRef(onDismiss);
   dismiss.current = onDismiss;
   const [position, setPosition] = useState<{ top: number; left: number; width: number; maxHeight: number; font: string } | null>(null);
+  const [contentWidth, setContentWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    if (!fitOptions || !menu.current) return;
+    const gutter = menu.current.offsetWidth - menu.current.clientWidth;
+    const widths = Array.from(menu.current.querySelectorAll("[data-option-label]"), (element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return range.getBoundingClientRect().width + 48 + gutter;
+    });
+    setContentWidth(Math.ceil(Math.max(0, ...widths)));
+  }, [fitOptions, count, position?.font, position?.maxHeight, children]);
 
   useLayoutEffect(() => {
     const trigger = anchor.current;
@@ -29,10 +42,12 @@ export function DropdownMenu({ anchor, id, label, count, active, onDismiss, chil
         dismiss.current();
         return;
       }
+      const width = Math.min(Math.max(rect.width, fitOptions ? contentWidth : 0), window.innerWidth - 16);
+      const left = fitOptions && rect.right - width >= 8 ? rect.right - width : rect.left;
       setPosition({
         top: rect.bottom + 4,
-        left: Math.max(8, Math.min(rect.left, window.innerWidth - rect.width - 8)),
-        width: rect.width,
+        left: Math.max(8, Math.min(left, window.innerWidth - width - 8)),
+        width,
         maxHeight: Math.min(178, Math.max(46, window.innerHeight - rect.bottom - 12)),
         font: getComputedStyle(trigger).font,
       });
@@ -66,7 +81,7 @@ export function DropdownMenu({ anchor, id, label, count, active, onDismiss, chil
       size.disconnect();
       disabled.disconnect();
     };
-  }, [anchor]);
+  }, [anchor, fitOptions, contentWidth]);
 
   useLayoutEffect(() => {
     const list = menu.current;

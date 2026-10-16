@@ -25,6 +25,8 @@ import { useApp } from "../state";
 import { useSync } from "../sync-context";
 import { SpaceSwitcher } from "../components/SpaceSwitcher";
 
+const VALUE_LINK = "max-w-full rounded-md text-left underline decoration-1 underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current";
+
 function greeting() {
   const hour = new Date().getHours();
   if (hour < 12) return "Bom dia";
@@ -98,49 +100,40 @@ export function Dashboard() {
             <line key={deg} x1="50" y1="50" x2="50" y2="8" stroke="white" strokeWidth="3" transform={`rotate(${deg} 50 50)`} />
           ))}
         </svg>
-        <button
-          type="button"
-          onClick={() => openList()}
-          aria-label="Ver todas as entradas e saídas do mês"
-          className="relative -m-2 block w-[calc(100%+1rem)] rounded-2xl p-2 text-left transition-colors hover:bg-white/10 focus-visible:outline-white"
-        >
+        <div className="relative">
           <span className="block text-sm font-semibold text-white/95">Saldo em contas</span>
-          <Money fit cents={stats.balance} className="mt-1 py-0.5 font-display text-[2.4rem] leading-none font-bold tracking-tight sm:text-[2.9rem]" />
+          <button type="button" onClick={() => openList()} aria-label="Ver todas as entradas e saídas do mês" className={`mt-1 block ${VALUE_LINK}`}>
+            <Money fit cents={stats.balance} className="py-0.5 font-display text-[2.4rem] leading-none font-bold tracking-tight sm:text-[2.9rem]" />
+          </button>
           {stats.forecast !== null && (
             <span className="mt-2 block text-sm text-white/95">
-              Previsto para o fim de {monthLabel(month, false).toLowerCase()}: <Money cents={stats.forecast} className="font-semibold" />
+              Previsto para o fim de {monthLabel(month, false).toLowerCase()}: <button type="button" onClick={() => openList()} aria-label="Ver todos os lançamentos do mês" className={`font-semibold ${VALUE_LINK}`}><Money cents={stats.forecast} /></button>
             </span>
           )}
-        </button>
+        </div>
         <div className="relative mt-5 grid grid-cols-2 gap-2.5 sm:gap-3">
-          <button
-            type="button"
-            onClick={() => openList("income")}
-            aria-label="Ver receitas do mês"
-            className="min-w-0 rounded-2xl bg-white/16 p-3 text-left transition-colors hover:bg-white/24 focus-visible:outline-white"
-          >
+          <div className="min-w-0 rounded-2xl bg-white/16 p-3">
             <span className="flex items-center gap-1.5 text-sm font-medium text-white/95">
               <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white/25">
                 <ArrowUpRight size={14} strokeWidth={2.6} />
               </span>
               Receitas
             </span>
-            <Money fit cents={stats.summary.income} className="mt-1 text-lg font-bold" />
-          </button>
-          <button
-            type="button"
-            onClick={() => openList("expense")}
-            aria-label="Ver despesas do mês"
-            className="min-w-0 rounded-2xl bg-white/16 p-3 text-left transition-colors hover:bg-white/24 focus-visible:outline-white"
-          >
+            <button type="button" onClick={() => openList("income")} aria-label="Ver receitas do mês" className={`mt-1 block ${VALUE_LINK}`}>
+              <Money fit cents={stats.summary.income} className="text-lg font-bold" />
+            </button>
+          </div>
+          <div className="min-w-0 rounded-2xl bg-white/16 p-3">
             <span className="flex items-center gap-1.5 text-sm font-medium text-white/95">
               <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white/25">
                 <ArrowDownRight size={14} strokeWidth={2.6} />
               </span>
               Despesas
             </span>
-            <Money fit cents={stats.summary.expense} className="mt-1 text-lg font-bold" />
-          </button>
+            <button type="button" onClick={() => openList("expense")} aria-label="Ver despesas do mês" className={`mt-1 block ${VALUE_LINK}`}>
+              <Money fit cents={stats.summary.expense} className="text-lg font-bold" />
+            </button>
+          </div>
         </div>
       </section>
 
@@ -153,7 +146,7 @@ export function Dashboard() {
                 <button
                   type="button"
                   onClick={() => navigateToTransactions({ titular: person.id || "__none__" })}
-                  className="min-h-11 w-full rounded-lg px-2 text-left font-semibold hover:bg-orange-soft"
+                  className="max-w-full rounded-lg px-2 py-2 text-left font-semibold hover:underline"
                   aria-label={`Ver lançamentos de ${person.name}`}
                 >{person.name}</button>
                 {[
@@ -161,16 +154,17 @@ export function Dashboard() {
                   { label: "Despesas", type: "expense", value: person.expense, color: "text-negative" },
                   { label: "Total", type: "", value: person.net, color: person.net < 0 ? "text-negative" : "text-positive" },
                 ].map((row) => (
-                  <button
+                  <div
                     key={row.label}
-                    type="button"
-                    aria-label={`Ver ${row.label.toLowerCase()} de ${person.name}`}
-                    onClick={() => navigateToTransactions({ titular: person.id || "__none__", ...(row.type ? { tipo: row.type } : {}) })}
-                    className={`flex min-h-12 w-full flex-wrap items-center justify-between gap-x-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-orange-soft ${row.type ? "" : "border-t border-dashed border-line font-bold"}`}
+                    className={`flex min-h-12 flex-wrap items-center justify-between gap-x-2 px-2 py-2 text-sm ${row.type ? "" : "border-t border-dashed border-line font-bold"}`}
                   >
                     <span>{row.label}</span>
-                    <Money cents={row.value} className={`ml-auto text-right font-semibold ${row.color}`} />
-                  </button>
+                    <button type="button" aria-label={`Ver ${row.label.toLowerCase()} de ${person.name}`}
+                      onClick={() => navigateToTransactions({ titular: person.id || "__none__", ...(row.type ? { tipo: row.type } : {}) })}
+                      className={`ml-auto font-semibold ${row.color} ${VALUE_LINK}`}>
+                      <Money cents={row.value} />
+                    </button>
+                  </div>
                 ))}
               </li>
             ))}
@@ -224,17 +218,15 @@ export function Dashboard() {
                   const category = c.categoryId ? categoryById.get(c.categoryId) : undefined;
                   return (
                     <li key={c.categoryId ?? "none"}>
-                      <button
-                        type="button"
-                        onClick={() => navigateToTransactions({ tipo: "expense", categoria: c.categoryId ?? "__none__" })}
-                        className="flex min-h-12 w-full items-center gap-2.5 rounded-xl px-1 text-left transition-colors hover:bg-orange-soft"
-                        aria-label={`Ver despesas de ${category?.name ?? "Sem categoria"}`}
-                      >
+                      <div className="flex min-h-12 items-center gap-2.5 px-1">
                       <ColorIcon icon={categoryIcon(category?.icon)} color={category?.color ?? "#868E96"} size="sm" />
                       <span className="min-w-0 flex-1 truncate text-sm font-semibold">{category?.name ?? "Sem categoria"}</span>
-                      <span className="text-xs text-muted tabular-nums">{Math.round(c.share * 100)}%</span>
-                      <Money cents={c.total} className="shrink-0 text-right text-sm font-semibold" />
+                      <button type="button" onClick={() => navigateToTransactions({ tipo: "expense", categoria: c.categoryId ?? "__none__" })}
+                        aria-label={`Ver despesas de ${category?.name ?? "Sem categoria"}`} className={`flex shrink-0 items-center gap-2.5 text-sm font-semibold ${VALUE_LINK}`}>
+                        <span className="text-xs text-muted tabular-nums">{Math.round(c.share * 100)}%</span>
+                        <Money cents={c.total} />
                       </button>
+                      </div>
                     </li>
                   );
                 })}
@@ -380,15 +372,15 @@ export function Dashboard() {
           <ul className="grid gap-3 sm:grid-cols-2">
             {stats.cards.map(({ account, owed }) => (
               <li key={account.id} className="relative flex items-center gap-3 rounded-xl bg-cream px-3 py-3 [&>div]:min-w-0">
-                <button type="button" aria-label={`Ver lançamentos de ${account.name}`} onClick={() => navigateToTransactions({ conta: account.id })} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left after:absolute after:inset-0 after:rounded-xl hover:text-brand-ink">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
                 <ColorIcon icon={CreditCard} color={account.color} />
-                <span className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{account.name}</p>
                   <p className="text-sm text-muted">
-                    Saldo devedor: <Money cents={Math.max(0, owed)} className="font-semibold text-ink" />
+                    Saldo devedor: <button type="button" aria-label={`Ver lançamentos de ${account.name}`} onClick={() => navigateToTransactions({ conta: account.id })} className={`font-semibold text-ink ${VALUE_LINK}`}><Money cents={Math.max(0, owed)} /></button>
                   </p>
-                </span>
-                </button>
+                </div>
+                </div>
                 {owed > 0 && (
                   <Button variant="secondary" className="relative z-10 h-9 px-3 text-sm" onClick={() => navigate("contas")}>
                     Pagar

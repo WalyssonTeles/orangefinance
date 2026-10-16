@@ -1,7 +1,7 @@
 import { CalendarDays, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { addDays, addMonths, calendarDays, currentMonth, editDateInput, formatDateInput, isISODate, monthLabel, parseISODate, shiftMonth, shortMonthLabel, todayISO, yearPage } from "../lib/dates";
+import { addDays, addMonths, calendarDays, currentMonth, dateInputSelection, editDateInput, formatDateInput, isISODate, monthLabel, parseISODate, shiftMonth, shortMonthLabel, todayISO, yearPage } from "../lib/dates";
 import { Button, IconButton, inputClass } from "./ui";
 
 export function MonthPicker({ month, onChange, className = "" }: {
@@ -28,6 +28,35 @@ export function DatePicker(props: DatePickerProps) {
 const WEEKDAYS = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
 const INITIALS = ["D", "S", "T", "Q", "Q", "S", "S"];
 
+function dateCaretFromPoint(input: HTMLInputElement, clientX: number): number {
+  if (!input.value) return 0;
+  const style = getComputedStyle(input);
+  const mirror = document.createElement("span");
+  mirror.setAttribute("aria-hidden", "true");
+  Object.assign(mirror.style, {
+    position: "fixed", left: "0", top: "0", visibility: "hidden", whiteSpace: "pre",
+    font: style.font, fontVariantNumeric: style.fontVariantNumeric, letterSpacing: style.letterSpacing,
+    fontFeatureSettings: style.fontFeatureSettings, fontVariationSettings: style.fontVariationSettings,
+  });
+  const text = mirror.appendChild(document.createTextNode(input.value));
+  document.body.appendChild(mirror);
+  try {
+    const offset = clientX - input.getBoundingClientRect().left - parseFloat(style.paddingLeft) - parseFloat(style.borderLeftWidth) + input.scrollLeft;
+    const range = document.createRange();
+    range.setStart(text, 0);
+    let previous = 0;
+    for (let index = 1; index <= input.value.length; index++) {
+      range.setEnd(text, index);
+      const width = range.getBoundingClientRect().width;
+      if (offset < (previous + width) / 2) return index - 1;
+      previous = width;
+    }
+    return input.value.length;
+  } finally {
+    mirror.remove();
+  }
+}
+
 function CalendarPicker({ mode, value, onChange, className = "", label, min = "1000-01-01", max = "9999-12-31", required = false, disabled = false }: {
   mode: "month" | "date";
   label?: string;
@@ -52,6 +81,9 @@ function CalendarPicker({ mode, value, onChange, className = "", label, min = "1
   const trigger = useRef<HTMLButtonElement>(null);
   const dateInput = useRef<HTMLInputElement>(null);
   const dateCaret = useRef<number | null>(null);
+  const datePointer = useRef<{ x: number; y: number; type: string; before: { start: number; end: number } } | null>(null);
+  const firstDateClick = useRef<{ x: number; y: number; time: number; caret: number; before: { start: number; end: number } } | null>(null);
+  const [dateTouched, setDateTouched] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
   const focusGrid = useRef(false);
   const years = yearPage(pageEnd);
@@ -60,9 +92,10 @@ function CalendarPicker({ mode, value, onChange, className = "", label, min = "1
   const yearEnabled = (candidate: number) => candidate >= Number(min.slice(0, 4)) && candidate <= Number(max.slice(0, 4));
   const dateEnabled = (candidate: string) => candidate >= min && candidate <= max;
   const dateError = !value ? required ? "Informe uma data no formato DD/MM/AAAA." : ""
-    : !isISODate(value) ? "Informe uma data válida no formato DD/MM/AAAA."
+    : !isISODate(value) ? "Informe uma data válida"
     : value < min ? `A data deve ser igual ou posterior a ${formatDateInput(min)}.`
     : value > max ? `A data deve ser igual ou anterior a ${formatDateInput(max)}.` : "";
+  const showDateError = Boolean(dateError && (dateTouched || formatDateInput(value).length === 10));
   useEffect(() => { dateInput.current?.setCustomValidity(dateError); }, [dateError]);
   const restoreDateCaret = () => {
     const input = dateInput.current;
@@ -162,9 +195,47 @@ function CalendarPicker({ mode, value, onChange, className = "", label, min = "1
       {dateMode ? <div className="relative">
         <input ref={dateInput} type="text" aria-label={label} inputMode="numeric" autoComplete="off"
           placeholder="DD/MM/AAAA" maxLength={10} required={required} disabled={disabled}
-          value={formatDateInput(value)} aria-invalid={value && dateError ? true : undefined}
-          className={`${inputClass} pr-12 tabular-nums disabled:cursor-not-allowed disabled:opacity-40`}
+          value={formatDateInput(value)} aria-invalid={showDateError || undefined}
+          aria-describedby={showDateError ? `${id}-error` : undefined}
+          className={`${inputClass} pr-12 tabular-nums aria-[invalid=true]:border-2 aria-[invalid=true]:border-negative aria-[invalid=true]:focus:border-negative disabled:cursor-not-allowed disabled:opacity-40`}
+          onBlur={() => { setDateTouched(true); firstDateClick.current = null; }}
+          onPointerDown={(event) => {
+            datePointer.current = event.isPrimary && event.button === 0 ? {
+              x: event.clientX, y: event.clientY, type: event.pointerType,
+              before: { start: event.currentTarget.selectionStart ?? 0, end: event.currentTarget.selectionEnd ?? 0 },
+            } : null;
+          }}
+          onPointerCancel={() => { datePointer.current = null; firstDateClick.current = null; }}
+          onMouseDown={(event) => {
+            // Touch browsers reset their native click count after three taps.
+            if (event.button === 0 && event.detail > 1 && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) event.preventDefault();
+          }}
+          onKeyDown={() => { firstDateClick.current = null; }}
+          onClick={(event) => {
+            const input = event.currentTarget;
+            const pointer = datePointer.current;
+            const first = firstDateClick.current;
+            if (!pointer || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey ||
+              Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > (pointer.type === "touch" ? 8 : 2)) {
+              firstDateClick.current = null;
+              return;
+            }
+            dateCaret.current = null;
+            if (first && event.timeStamp - first.time <= 500 && Math.hypot(event.clientX - first.x, event.clientY - first.y) <= 12) {
+              const selection = dateInputSelection(first.caret, input.value.length, first.before);
+              input.setSelectionRange(selection.start, selection.end);
+              firstDateClick.current = null;
+              return;
+            }
+            const caret = dateCaretFromPoint(input, event.clientX);
+            input.setSelectionRange(caret, caret);
+            firstDateClick.current = {
+              x: event.clientX, y: event.clientY, time: event.timeStamp, caret, before: pointer.before,
+            };
+          }}
+          onDoubleClick={(event) => event.preventDefault()}
           onChange={(event) => {
+            firstDateClick.current = null;
             const input = event.currentTarget;
             const native = event.nativeEvent;
             const inputType = "inputType" in native && typeof native.inputType === "string" ? native.inputType : "";
@@ -176,9 +247,10 @@ function CalendarPicker({ mode, value, onChange, className = "", label, min = "1
         <button ref={trigger} type="button" aria-label={`Abrir calendário: ${label}`} title="Abrir calendário"
           aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? `${id}-calendar` : undefined}
           disabled={disabled} onClick={show}
-          className="absolute inset-y-0 right-0 grid w-11 place-items-center rounded-r-xl text-muted hover:text-brand-ink focus-visible:outline-2 focus-visible:outline-orange disabled:cursor-not-allowed disabled:opacity-40">
+          className="absolute top-0 right-0 grid h-11 w-11 place-items-center rounded-r-xl text-muted hover:text-brand-ink focus-visible:outline-2 focus-visible:outline-orange disabled:cursor-not-allowed disabled:opacity-40">
           <CalendarDays size={18} aria-hidden="true" />
         </button>
+        {showDateError && <p id={`${id}-error`} className="mt-1.5 text-xs text-negative">{dateError}</p>}
       </div> : <button ref={trigger} type="button" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? `${id}-calendar` : undefined}
         disabled={disabled} onClick={show} className="h-full min-w-0 flex-1 px-2 text-center text-[0.95rem] font-semibold sm:min-w-[9.5rem]">
         {monthLabel(value)}

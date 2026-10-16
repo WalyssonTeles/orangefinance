@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { Children, cloneElement, isValidElement, useId, type ButtonHTMLAttributes, type ReactNode } from "react";
 export { DatePicker, MonthPicker } from "./CalendarPicker";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -66,12 +66,23 @@ export function PageHeader({ title, subtitle, actions, actionsClassName = "" }: 
 }
 
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {
+  const id = useId();
+  const labelId = `${id}-label`;
+  const hintId = hint ? `${id}-hint` : undefined;
+  const controls = (nodes: ReactNode): ReactNode => Children.map(nodes, (node) => {
+    if (!isValidElement<{ children?: ReactNode; "aria-label"?: string; "aria-labelledby"?: string; "aria-describedby"?: string }>(node) || typeof node.type !== "string") return node;
+    if (["input", "textarea", "select"].includes(node.type)) return cloneElement(node, {
+      "aria-labelledby": node.props["aria-labelledby"] ?? (node.props["aria-label"] ? undefined : labelId),
+      "aria-describedby": [node.props["aria-describedby"], hintId].filter(Boolean).join(" ") || undefined,
+    });
+    return node.props.children ? cloneElement(node, {}, controls(node.props.children)) : node;
+  });
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-semibold text-muted">{label}</span>
-      {children}
-      {hint && <span className="mt-1.5 block text-xs text-muted">{hint}</span>}
-    </label>
+    <div role="group" aria-labelledby={labelId} aria-describedby={hintId} className="block">
+      <span id={labelId} className="mb-1.5 block text-sm font-semibold text-muted">{label}</span>
+      {controls(children)}
+      {hint && <span id={hintId} className="mt-1.5 block text-xs text-muted">{hint}</span>}
+    </div>
   );
 }
 
@@ -114,20 +125,15 @@ export function Segmented<T extends string>({
 
 export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between gap-3 rounded-xl py-1 text-left text-[0.95rem] font-medium"
-    >
-      {label}
-      <span className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${checked ? "bg-positive" : "bg-ink/20"}`}>
+    <div className="flex w-full items-center justify-between gap-3 py-1 text-[0.95rem] font-medium">
+      <span>{label}</span>
+      <button type="button" role="switch" aria-label={label} aria-checked={checked} onClick={() => onChange(!checked)}
+        className={`relative h-7 w-12 shrink-0 rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange ${checked ? "bg-positive" : "bg-ink/20"}`}>
         <span
           className={`absolute top-1 size-5 rounded-full bg-white shadow transition-[left] ${checked ? "left-6" : "left-1"}`}
         />
-      </span>
-    </button>
+      </button>
+    </div>
   );
 }
 

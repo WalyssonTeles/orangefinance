@@ -2,7 +2,8 @@ import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Transaction, TxType } from "../lib/db";
 import { todayISO } from "../lib/dates";
-import { FREQUENCIES } from "../lib/recurrence";
+import { accountLabel } from "../lib/finance";
+import { SELECTABLE_FREQUENCIES } from "../lib/recurrence";
 import { createBatch, undoBatch, type BatchEntry } from "../lib/repo";
 import { useApp } from "../state";
 import { DescriptionInput } from "./DescriptionInput";
@@ -14,7 +15,7 @@ import { Button, DatePicker, inputClass } from "./ui";
 interface Row extends BatchEntry { key: string }
 
 export function BatchTransactions({ onClose }: { onClose: () => void }) {
-  const { data, sharedSpace, members, currentUserId } = useApp();
+  const { data, sharedSpace, members, memberById, currentUserId } = useApp();
   const makeRow = (): Row => ({
     key: crypto.randomUUID(),
     draft: {
@@ -100,10 +101,10 @@ export function BatchTransactions({ onClose }: { onClose: () => void }) {
                   additionalDescriptions={rows.filter((item) => item.key !== row.key).map((item) => item.draft.description)} /></td>
                 <td className="min-w-44"><Select label={`Categoria da linha ${index + 1}`} value={draft.categoryId ?? ""} disabled={draft.type === "transfer" || busy} onChange={(categoryId) => changeDraft({ categoryId })}
                   options={[{ value: "", label: "Selecione" }, ...data.categories.filter((category) => category.kind === draft.type).map((category) => ({ value: category.id, label: category.name }))]} /></td>
-                <td className="min-w-52"><Select label={`Conta da linha ${index + 1}`} value={draft.accountId} disabled={busy} onChange={(accountId) => changeDraft({ accountId })}
-                  options={[{ value: "", label: "Selecione" }, ...data.accounts.map((item) => ({ value: item.id, label: item.name }))]} />
-                {draft.type === "transfer" && <Select label={`Destino da linha ${index + 1}`} className="mt-1" value={draft.toAccountId ?? ""} disabled={busy} onChange={(toAccountId) => changeDraft({ toAccountId })}
-                  options={[{ value: "", label: "Conta de destino" }, ...data.accounts.filter((item) => item.id !== draft.accountId).map((item) => ({ value: item.id, label: item.name }))]} />}</td>
+                <td className="min-w-52"><Select label={`Conta da linha ${index + 1}`} value={draft.accountId} disabled={busy} fitOptions={sharedSpace} onChange={(accountId) => changeDraft({ accountId })}
+                  options={[{ value: "", label: "Selecione" }, ...data.accounts.map((item) => ({ value: item.id, label: accountLabel(item, sharedSpace ? memberById : undefined) }))]} />
+                {draft.type === "transfer" && <Select label={`Destino da linha ${index + 1}`} className="mt-1" value={draft.toAccountId ?? ""} disabled={busy} fitOptions={sharedSpace} onChange={(toAccountId) => changeDraft({ toAccountId })}
+                  options={[{ value: "", label: "Conta de destino" }, ...data.accounts.filter((item) => item.id !== draft.accountId).map((item) => ({ value: item.id, label: accountLabel(item, sharedSpace ? memberById : undefined) }))]} />}</td>
                 <td className="min-w-44"><DatePicker label={`${dateLabel} da linha ${index + 1}`} required value={draft.date} disabled={busy} onChange={(date) => changeDraft({ date })} /><span className="text-xs text-muted">{dateLabel}</span></td>
                 <td className="min-w-40"><Select label={`Repetição da linha ${index + 1}`} value={repeat.mode} disabled={draft.type === "transfer" || busy} onChange={(mode) => {
                   if (mode === "none" || mode === "installments" || mode === "recurring") changeRepeat({ mode });
@@ -111,10 +112,9 @@ export function BatchTransactions({ onClose }: { onClose: () => void }) {
                 <td className="min-w-40"><input aria-label={`Número de parcelas da linha ${index + 1}`} type="number" min={2} max={1200} className={`${inputClass} disabled:opacity-40`} disabled={repeat.mode !== "installments" || busy} value={repeat.mode === "installments" ? repeat.count || "" : ""} onChange={(event) => changeRepeat({ count: Number(event.target.value) })} /></td>
                 <td className="min-w-28"><input aria-label={`Quantidade de ocorrências da linha ${index + 1}`} type="number" min={2} max={1200} className={`${inputClass} disabled:opacity-40`} disabled={repeat.mode !== "recurring" || busy} value={repeat.mode === "recurring" ? repeat.count || "" : ""} onChange={(event) => changeRepeat({ count: Number(event.target.value) })} /></td>
                 <td className="min-w-64"><Select label={`Frequência da linha ${index + 1}`} value={repeat.frequency ?? "monthly"} disabled={repeat.mode !== "recurring" || busy} onChange={(value) => {
-                  const frequency = FREQUENCIES.find((item) => item.value === value)?.value;
+                  const frequency = SELECTABLE_FREQUENCIES.find((item) => item.value === value)?.value;
                   if (frequency) changeRepeat({ frequency });
-                }} options={FREQUENCIES} />
-                {repeat.mode === "recurring" && repeat.frequency === "custom" && <label className="mt-1 block text-xs text-muted">Intervalo em dias<input type="number" min={1} max={3650} className={inputClass} value={repeat.intervalDays || ""} onChange={(event) => changeRepeat({ intervalDays: Number(event.target.value) })} /></label>}</td>
+                }} options={SELECTABLE_FREQUENCIES} /></td>
                 {sharedSpace && <td className="min-w-40"><Select label={`Titular da linha ${index + 1}`} value={draft.holderId ?? ""} disabled={busy} onChange={(holderId) => changeDraft({ holderId: holderId || null })}
                   options={[{ value: "", label: "Sem titular" }, ...members.map((member) => ({ value: member.userId, label: member.name }))]} /></td>}
                 <td className="min-w-48"><Select label={`Status da linha ${index + 1}`} value={credit ? "invoice" : String(draft.paid)} disabled={credit || busy} onChange={(value) => changeDraft({ paid: value === "true" })}

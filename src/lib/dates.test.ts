@@ -1,5 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { calendarDays, editDateInput, formatDateInput, isISODate, maskDateInput, monthLabel, parseISODate, shiftMonth, yearPage } from "./dates";
+import { calendarDays, dateInputSelection, editDateInput, formatDateInput, isISODate, maskDateInput, monthLabel, parseISODate, shiftMonth, yearPage } from "./dates";
+
+describe("manual date selection", () => {
+  it.each([[1, 0, 2], [4, 3, 5], [8, 6, 10]])("selects the segment at caret %i", (caret, start, end) => {
+    expect(dateInputSelection(caret, 10, { start: caret, end: caret })).toEqual({ start, end });
+    expect(dateInputSelection(caret, 10, { start, end })).toEqual({ start: 0, end: 10 });
+  });
+  it("selects a different segment rather than the whole date", () => {
+    expect(dateInputSelection(4, 10, { start: 0, end: 2 })).toEqual({ start: 3, end: 5 });
+    expect(dateInputSelection(4, 10, { start: 0, end: 10 })).toEqual({ start: 3, end: 5 });
+  });
+  it("bounds selection to incomplete and empty values", () => {
+    expect(dateInputSelection(8, 8, { start: 0, end: 0 })).toEqual({ start: 6, end: 8 });
+    expect(dateInputSelection(0, 0, { start: 0, end: 0 })).toEqual({ start: 0, end: 0 });
+  });
+  it("replaces a fully selected date with fresh masked input", () => {
+    expect(editDateInput("16/10/2026", "2", 1, "insertText")).toEqual({ text: "2", value: "2", caret: 1 });
+  });
+});
 
 describe("month and year selection", () => {
   it("moves exactly one month across year boundaries", () => {

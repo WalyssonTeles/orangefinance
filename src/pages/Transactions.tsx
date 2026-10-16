@@ -7,7 +7,7 @@ import { TransactionRow } from "../components/TransactionRow";
 import { Card, EmptyState, Field, inputClass, MonthPicker, PageHeader } from "../components/ui";
 import type { Transaction, TxType } from "../lib/db";
 import { dayLabel, monthLabel } from "../lib/dates";
-import { groupByDate, inMonth, matchesSearch, monthSummary } from "../lib/finance";
+import { accountLabel, groupByDate, inMonth, matchesSearch, monthSummary } from "../lib/finance";
 import { replaceParams, useLocation } from "../lib/router";
 import { useApp } from "../state";
 
@@ -34,6 +34,7 @@ export function Transactions() {
   const { data, month, setMonth, sharedSpace, members, memberById } = useApp();
   const { params, section } = useLocation();
   const listRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [ascending, setAscending] = useState(false);
@@ -125,6 +126,10 @@ export function Transactions() {
   }, [personTx, filter, accountId, categoryId, query, data.categoryById, ascending]);
 
   const filtered = query || filter !== "all" || accountId || categoryId || holderId;
+  const submitSearch = () => {
+    searchRef.current?.blur();
+    requestAnimationFrame(() => listRef.current?.scrollIntoView({ block: "start", behavior: "smooth" }));
+  };
 
   return (
     <div>
@@ -159,16 +164,18 @@ export function Transactions() {
         </div>
         <div id="transaction-filters" hidden={!expanded} className="mt-3 space-y-3">
           <Field label="Buscar Lançamentos">
-            <div className="relative">
-            <Search size={18} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted" />
+            <form role="search" aria-label="Buscar lançamentos" className="relative" onSubmit={(event) => { event.preventDefault(); submitSearch(); }}>
+            <button type="submit" aria-label="Buscar lançamentos" className="absolute top-0 left-0 grid size-11 place-items-center rounded-l-xl text-muted hover:text-brand-ink focus-visible:outline-2 focus-visible:outline-orange"><Search size={18} aria-hidden="true" /></button>
             <input
+              ref={searchRef}
               type="search"
-              className={`${inputClass} pl-10`}
+              enterKeyHint="search"
+              className={`${inputClass} pl-11`}
               placeholder="Buscar lançamentos"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
-            </div>
+            </form>
           </Field>
           <fieldset className="min-w-0">
             <legend className="mb-1.5 text-sm font-semibold text-muted">Tipo de Lançamento</legend>
@@ -213,9 +220,9 @@ export function Transactions() {
           )}
           <div className="grid gap-2 sm:grid-cols-2">
             <Field label="Contas e Cartões">
-            <Select label="Contas e Cartões" value={accountId} onChange={(value) => { setAccountId(value); updateUrl(filter, holderId, categoryId, value); }} options={[
+            <Select label="Contas e Cartões" value={accountId} fitOptions={sharedSpace} onChange={(value) => { setAccountId(value); updateUrl(filter, holderId, categoryId, value); }} options={[
               { value: "", label: "Todas as contas" },
-              ...data.accounts.map((a) => ({ value: a.id, label: `${a.name}${sharedSpace && a.holderId ? ` · ${memberById.get(a.holderId)?.name ?? "Ex-participante"}` : ""}` })),
+              ...data.accounts.map((a) => ({ value: a.id, label: accountLabel(a, sharedSpace ? memberById : undefined) })),
             ]} />
             </Field>
             <Field label="Categoria">

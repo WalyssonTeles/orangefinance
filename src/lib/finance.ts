@@ -7,6 +7,10 @@ export function alive<T extends { deletedAt: number | null }>(items: readonly T[
 
 export const isCredit = (account: Pick<Account, "type">) => account.type === "credit";
 
+export function accountLabel(account: Pick<Account, "name" | "holderId">, members?: ReadonlyMap<string, { name: string }>): string {
+  return `${account.name}${members && account.holderId ? ` · ${members.get(account.holderId)?.name ?? "Ex-participante"}` : ""}`;
+}
+
 export interface BalanceOptions {
   /** Include unpaid transactions up to this date (inclusive). */
   forecastUntil?: string;

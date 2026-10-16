@@ -123,6 +123,15 @@ export function shortDate(iso: string): string {
     .replace(".", "");
 }
 
+export function dateInputSelection(caret: number, length: number, previous: { start: number; end: number }): { start: number; end: number } {
+  const position = Math.max(0, Math.min(caret, length));
+  const start = position < 3 ? 0 : position < 6 ? 3 : 6;
+  const end = Math.min(length, start + (start === 6 ? 4 : 2));
+  return previous.start === start && previous.end === end && end > start
+    ? { start: 0, end: length }
+    : { start, end };
+}
+
 export function addDays(iso: string, delta: number): string {
   const d = parseISODate(iso);
   d.setDate(d.getDate() + delta);

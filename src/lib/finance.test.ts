@@ -3,6 +3,7 @@ import type { Account, Budget, Transaction } from "./db";
 import { addMonths, lastDayOfMonth, shiftMonth } from "./dates";
 import {
   accountBalances,
+  accountLabel,
   budgetProgress,
   descriptionSuggestions,
   monthlyHistory,
@@ -15,6 +16,19 @@ import {
 import { digitsToCents, formatBRL } from "./money";
 
 const base = { createdAt: 1, updatedAt: 1, deletedAt: null };
+
+describe("account labels", () => {
+  const members = new Map([["a", { name: "Ana" }], ["b", { name: "Bruno" }]]);
+  it("disambiguates accounts with the same name in shared spaces", () => {
+    expect(accountLabel({ name: "Inter", holderId: "a" }, members)).toBe("Inter · Ana");
+    expect(accountLabel({ name: "Inter", holderId: "b" }, members)).toBe("Inter · Bruno");
+  });
+  it("preserves personal, unassigned and former-member labels", () => {
+    expect(accountLabel({ name: "Inter", holderId: "a" })).toBe("Inter");
+    expect(accountLabel({ name: "Inter", holderId: null }, members)).toBe("Inter");
+    expect(accountLabel({ name: "Inter", holderId: "removed" }, members)).toBe("Inter · Ex-participante");
+  });
+});
 
 const account = (id: string, type: Account["type"] = "checking", initialBalance = 0): Account => ({
   ...base,

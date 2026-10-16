@@ -2,7 +2,7 @@ import { Trash2 } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import type { TxType } from "../lib/db";
 import { addDays, isISODate, todayISO } from "../lib/dates";
-import { isCredit } from "../lib/finance";
+import { accountLabel, isCredit } from "../lib/finance";
 import { cardCycle } from "../lib/invoices";
 import { transactionRepeat, validateRepeat, type Repeat } from "../lib/recurrence";
 import {
@@ -253,12 +253,12 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={type === "transfer" ? "De" : "Conta ou cartão"}>
             <Select label={type === "transfer" ? "De" : "Conta ou cartão"} value={accountId} onChange={setAccountId}
-              options={data.accounts.map((a) => ({ value: a.id, label: `${a.name}${sharedSpace && a.holderId ? ` · ${memberById.get(a.holderId)?.name ?? "Ex-participante"}` : ""}` }))} />
+              fitOptions={sharedSpace} options={data.accounts.map((a) => ({ value: a.id, label: accountLabel(a, sharedSpace ? memberById : undefined) }))} />
           </Field>
           {type === "transfer" ? (
             <Field label="Para">
               <Select label="Para" value={toAccountId} onChange={setToAccountId}
-                options={data.accounts.map((a) => ({ value: a.id, label: `${a.name}${sharedSpace && a.holderId ? ` · ${memberById.get(a.holderId)?.name ?? "Ex-participante"}` : ""}` }))} />
+                fitOptions={sharedSpace} options={data.accounts.map((a) => ({ value: a.id, label: accountLabel(a, sharedSpace ? memberById : undefined) }))} />
             </Field>
           ) : (
             <Field label={dateLabel}>

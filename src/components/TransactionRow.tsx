@@ -35,7 +35,9 @@ export function TransactionRow({ tx, showDate }: { tx: Transaction; showDate?: s
   const details = isTransfer
     ? `${account?.name ?? "Conta removida"} → ${target?.name ?? "Conta removida"}`
     : [holder, category?.name ?? "Sem categoria", account?.name].filter(Boolean).join(" · ");
-  const series = tx.installments ? `${tx.installment}/${tx.installments}` : tx.groupId ? FREQUENCIES.find((item) => item.value === (tx.frequency ?? "monthly"))?.label : null;
+  const series = tx.installments ? `${tx.installment}/${tx.installments}` : tx.groupId
+    ? tx.frequency === "fortnightly" ? "Quinzenal" : FREQUENCIES.find((item) => item.value === (tx.frequency ?? "monthly"))?.label
+    : null;
   const statusLabel = tx.paid ? (tx.type === "income" ? "Recebido" : isTransfer ? "Feita" : "Pago") : overdue ? "Atrasado" : "Pendente";
   const toggleLabel = tx.paid ? "Marcar como pendente" : tx.type === "income" ? "Marcar como recebido" : "Marcar como pago";
 
@@ -163,7 +165,7 @@ export function TransactionRow({ tx, showDate }: { tx: Transaction; showDate?: s
         <button
           type="button"
           onClick={onRowClick}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-cream"
+          className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-cream"
           aria-label={`${title}, ${statusLabel}. Abrir lançamento`}
         >
           {isTransfer ? (
@@ -173,10 +175,7 @@ export function TransactionRow({ tx, showDate }: { tx: Transaction; showDate?: s
           )}
           <span className="min-w-0 flex-1">
             <span className="block truncate font-semibold">{title}</span>
-            <span className="flex items-center gap-1.5 text-sm text-muted">
-              <span className="truncate">{showDate ? `${showDate} · ${details}` : details}</span>
-              {series && <span className="shrink-0 rounded-md bg-ink/6 px-1.5 text-xs font-semibold">{series}</span>}
-            </span>
+            <span className="block truncate text-sm text-muted">{showDate ? `${showDate} · ${details}` : details}</span>
           </span>
           <span className="flex shrink-0 flex-col items-end gap-0.5">
             <Money
@@ -193,6 +192,7 @@ export function TransactionRow({ tx, showDate }: { tx: Transaction; showDate?: s
               {statusLabel}
             </span>
           </span>
+          {series && <span className="col-span-2 col-start-2 min-w-0"><span className="inline-block max-w-full truncate rounded-md bg-ink/6 px-1.5 align-middle text-xs font-semibold">{series}</span></span>}
         </button>
 
         {/* Pointer devices: actions appear on hover or keyboard focus. */}

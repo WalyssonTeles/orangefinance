@@ -1,5 +1,5 @@
 import type { Transaction } from "./db";
-import { addDays, addMonths } from "./dates";
+import { addDays, addMonths, isISODate, parseISODate } from "./dates";
 
 export type Frequency = NonNullable<Transaction["frequency"]>;
 export type RepeatMode = "none" | "installments" | "recurring" | "monthly";
@@ -13,11 +13,28 @@ export interface Repeat {
 export const FREQUENCIES: { value: Frequency; label: string }[] = [
   { value: "daily", label: "Diariamente" },
   { value: "weekly", label: "Semanalmente" },
-  { value: "fortnightly", label: "Quinzenalmente (a cada 2 semanas)" },
+  { value: "fortnightly", label: "Quinzenalmente" },
   { value: "monthly", label: "Mensalmente" },
   { value: "yearly", label: "Anualmente" },
   { value: "custom", label: "Personalizado" },
 ];
+
+export const SELECTABLE_FREQUENCIES = FREQUENCIES.filter((item) => item.value !== "custom");
+
+export function recurrenceHint(date: string, frequency: Frequency): string | undefined {
+  if (frequency === "daily") return "Dia após dia";
+  if (!isISODate(date)) return undefined;
+  const day = parseISODate(date);
+  const weekday = day.toLocaleDateString("pt-BR", { weekday: "long" });
+  if (frequency === "weekly") return `${day.getDay() === 0 || day.getDay() === 6 ? "Todo" : "Toda"} ${weekday}`;
+  if (frequency === "fortnightly") {
+    const name = weekday.replace("-feira", "");
+    return `${name.charAt(0).toUpperCase()}${name.slice(1)} sim, ${name} não`;
+  }
+  if (frequency === "monthly") return `Todo dia ${day.getDate()} do mês`;
+  if (frequency === "yearly") return `Todo dia ${day.getDate()} de ${day.toLocaleDateString("pt-BR", { month: "long" })}`;
+  return undefined;
+}
 
 export function validateRepeat(repeat: Repeat): void {
   if (!["none", "installments", "recurring", "monthly"].includes(repeat.mode)) throw new Error("Escolha uma repetição válida.");
