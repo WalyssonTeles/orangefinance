@@ -99,6 +99,10 @@ Para compartilhar com sua esposa:
 
 Nos espaços compartilhados, cada lançamento tem um **Titular** (por padrão, quem lançou). Em Lançamentos é possível ver tudo junto ou por pessoa, e o início mostra o resumo **Por pessoa**.
 
+Na versão **1.1**, contas e cartões também podem ter um titular, sem alterar a titularidade dos lançamentos. O resumo por pessoa funciona como um comprovante com atalhos para os filtros de Lançamentos; gastos por categoria também abrem a lista filtrada. O seletor de período permite escolher meses e páginas de 12 anos, com tela cheia no celular. Os filtros têm labels visíveis e Ajustes tem um único retorno por nível, com alvo de toque ampliado.
+
+O responsável pode alterar o **Nome do espaço** nos detalhes em **Ajustes → Espaço compartilhado**. O novo nome aparece na lista e no seletor de espaços, e nos outros aparelhos após a atualização da lista. Isso não altera o código, participantes nem dados financeiros.
+
 Quem tiver o código pode entrar no espaço, então trate-o como uma senha. O responsável pode **gerar um novo código** (o anterior para de funcionar) e remover participantes; há limite de 10 tentativas inválidas por hora por conta. Participantes podem sair, mas o responsável não pode sair do próprio espaço. Todos os membros podem alterar e apagar dados financeiros **do espaço compartilhado**. Sexo e data de nascimento do Perfil nunca são mostrados aos outros participantes.
 
 A troca de espaços guarda alterações pendentes em caches separados; elas serão enviadas quando você voltar ao espaço correspondente e houver internet. O backup exportado contém apenas o espaço ativo. Não importe um backup pessoal dentro do espaço familiar sem querer compartilhar aquele conteúdo.
@@ -115,6 +119,8 @@ Este projeto é **Vite/React**, não Next.js. Não usa `@supabase/ssr`, middlewa
 4. Configure o provedor **Google** conforme a seção abaixo. O login usa OAuth/PKCE e não depende de SMTP ou da edição dos modelos de e-mail. Mantenha novos cadastros habilitados para permitir o primeiro acesso de cada pessoa.
 5. Copie `.env.example` para `.env.local` e preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`. Reinicie o servidor local após alterar variáveis.
 6. Para o GitHub Pages, crie as mesmas duas **Repository variables** em **Settings → Secrets and variables → Actions → Variables** e execute novamente a publicação. A configuração de ambiente é incorporada durante o build; o arquivo `.env.local` não é enviado ao GitHub.
+
+**Atualização 1.0 → 1.1:** antes de publicar o frontend 1.1, execute somente [a migração da 1.1](./supabase/migrations/202610160002_v1_1.sql) sobre o banco que já recebeu as anteriores. Ela adiciona a função `rename_finance_workspace`, restrita ao responsável de espaços compartilhados, e não altera snapshots, revisões, códigos ou participantes. É reaplicável e compatível com o frontend 1.0. Titulares de contas são campos opcionais no JSON existente; backups antigos continuam aceitos, sem alteração do banco IndexedDB ou reatribuição de lançamentos. Os testes verificam a preservação e a sincronização desses dados, incluindo bases de comparação anteriores à 1.1.
 
 Somente a URL e a chave **publishable** podem ser incorporadas no navegador. Nunca use senha do banco, chave secreta, `service_role` ou token administrativo em variáveis `VITE_*`. A chave pública não é uma autorização para ler os dados: as políticas do banco são obrigatórias. Não remova a RLS nem conceda acesso a `anon` para contornar erros.
 

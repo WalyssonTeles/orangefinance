@@ -10,7 +10,8 @@ import { accountBalances, budgetStatus, isCredit, totalBalance } from "../lib/fi
 import { useApp } from "../state";
 
 export function Accounts() {
-  const { data, month, openTransaction } = useApp();
+  const { data, month, openTransaction, sharedSpace, memberById } = useApp();
+  const holderName = (account: Account) => account.holderId ? memberById.get(account.holderId)?.name ?? "Ex-participante" : "Sem titular";
   const [editing, setEditing] = useState<Account | "new" | null>(null);
 
   const { balances, forecast, total, owed } = useMemo(() => {
@@ -60,6 +61,7 @@ export function Accounts() {
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{account.name}</p>
                     <p className="text-sm text-muted">{label}</p>
+                    {sharedSpace && <p className="truncate text-sm text-muted">Titular: {holderName(account)}</p>}
                   </div>
                 </div>
                 <Money fit cents={current} className={`mt-4 font-display text-2xl font-bold ${current < 0 ? "text-negative" : ""}`} />
@@ -100,6 +102,7 @@ export function Accounts() {
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{card.name}</p>
                     <p className="text-sm text-muted">Cartão de crédito</p>
+                    {sharedSpace && <p className="truncate text-sm text-muted">Titular: {holderName(card)}</p>}
                   </div>
                 </button>
                 <p className="mt-4 text-sm text-muted">Fatura atual</p>

@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import type { Account, AccountType, Budget, Category, CategoryKind } from "../lib/db";
 import { deleteAccount, deleteBudget, deleteCategory, saveAccount, saveBudget, saveCategory } from "../lib/repo";
 import { useApp } from "../state";
-import { ACCOUNT_TYPES, CATEGORY_ICONS, ColorIcon, PALETTE, categoryIcon } from "./icons";
+import { ACCOUNT_TYPES, CATEGORY_ICONS, CATEGORY_ICON_LABELS, ColorIcon, PALETTE, categoryIcon } from "./icons";
 import { Modal } from "./Modal";
 import { MoneyInput } from "./MoneyInput";
 import { Button, ColorSwatches, Field, inputClass, Segmented, Switch } from "./ui";
@@ -62,13 +62,14 @@ function ErrorText({ text }: { text: string }) {
 /* ---------- Account ---------- */
 
 export function AccountForm({ account, onClose }: { account?: Account; onClose: () => void }) {
-  const { notify } = useApp();
+  const { notify, sharedSpace, members, memberById, currentUserId } = useApp();
   const [name, setName] = useState(account?.name ?? "");
   const [type, setType] = useState<AccountType>(account?.type ?? "checking");
   const [color, setColor] = useState(account?.color ?? PALETTE[0]);
   const [balance, setBalance] = useState(Math.abs(account?.initialBalance ?? 0));
   const [negative, setNegative] = useState((account?.initialBalance ?? 0) < 0);
   const [limit, setLimit] = useState(account?.creditLimit ?? 0);
+  const [holderId, setHolderId] = useState(account ? account.holderId ?? "" : currentUserId ?? "");
   const [error, setError] = useState("");
   const credit = type === "credit";
 
@@ -84,6 +85,7 @@ export function AccountForm({ account, onClose }: { account?: Account; onClose: 
       color,
       initialBalance,
       creditLimit: credit ? limit : null,
+      holderId: sharedSpace ? holderId || null : account?.holderId ?? null,
     });
     notify(account ? "Conta atualizada." : "Conta criada.");
     onClose();
@@ -120,6 +122,17 @@ export function AccountForm({ account, onClose }: { account?: Account; onClose: 
             }}
           />
         </Field>
+        {sharedSpace && (
+          <Field label="Titular" hint="Identifica a quem pertence a conta ou cartão. Não altera o titular dos lançamentos.">
+            <select className={inputClass} value={holderId} onChange={(event) => setHolderId(event.target.value)}>
+              <option value="">Sem titular (da família)</option>
+              {members.map((member) => (
+                <option key={member.userId} value={member.userId}>{member.name}{member.userId === currentUserId ? " (você)" : ""}</option>
+              ))}
+              {holderId && !memberById.has(holderId) && <option value={holderId}>Ex-participante</option>}
+            </select>
+          </Field>
+        )}
         <fieldset>
           <legend className="mb-1.5 text-sm font-semibold text-muted">Tipo</legend>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -250,12 +263,13 @@ export function CategoryForm({
         )}
         <fieldset>
           <legend className="mb-1.5 text-sm font-semibold text-muted">Ícone</legend>
-          <div className="grid grid-cols-7 gap-1.5 sm:grid-cols-9">
+          <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-8">
             {Object.entries(CATEGORY_ICONS).map(([key, Icon]) => (
               <button
                 key={key}
                 type="button"
-                aria-label={key}
+                aria-label={CATEGORY_ICON_LABELS[key] ?? key}
+                title={CATEGORY_ICON_LABELS[key] ?? key}
                 aria-pressed={icon === key}
                 onClick={() => setIcon(key)}
                 className={`grid aspect-square place-items-center rounded-xl transition-colors ${

@@ -69,4 +69,67 @@ describe("Supabase PostgreSQL permissions", () => {
     const results = await postgres.exec(sql("tests", "v1.sql"));
     expect(JSON.stringify(results.at(-1)?.rows)).toContain("PASS:");
   }, 20_000);
+
+  it("upgrades to 1.1 without changing snapshots, codes or memberships and restricts renaming to shared-space owners", async () => {
+    const snapshot = async () => (await postgres.query("select * from public.workspace_finance order by workspace_id")).rows;
+    const memberships = async () => (await postgres.query("select * from public.finance_members order by workspace_id, user_id")).rows;
+    const codes = async () => (await postgres.query("select id, join_code from public.finance_workspaces order by id")).rows;
+    const before = { data: await snapshot(), members: await memberships(), codes: await codes() };
+    await postgres.exec(sql("migrations", "202610160002_v1_1.sql"));
+    await postgres.exec(sql("migrations", "202610160002_v1_1.sql"));
+    await postgres.exec(`
+      begin;
+      set local role authenticated;
+      select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-0000000000a1', true);
+      select public.rename_finance_workspace('00000000-0000-4000-8000-0000000000b1', '  Novo nome  ');
+      commit;
+    `);
+    const names = await postgres.query<{ name: string }>("select name from public.finance_workspaces where id = '00000000-0000-4000-8000-0000000000b1'");
+    expect(names.rows[0].name).toBe("Novo nome");
+    expect({ data: await snapshot(), members: await memberships(), codes: await codes() }).toEqual(before);
+    await postgres.exec(`
+      begin;
+      insert into auth.users(id, email) values ('00000000-0000-4000-8000-0000000000a2', 'v11-member@example.invalid');
+      insert into public.finance_members(workspace_id, user_id, role)
+        values ('00000000-0000-4000-8000-0000000000b1', '00000000-0000-4000-8000-0000000000a2', 'member');
+      set local role authenticated;
+      select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-0000000000a2', true);
+      do $$ begin
+        begin
+          perform public.rename_finance_workspace('00000000-0000-4000-8000-0000000000b1', 'Not allowed');
+          raise exception 'A member renamed a shared space';
+        exception when insufficient_privilege then null; end;
+      end $$;
+      select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-0000000000a1', true);
+      do $$ begin
+        begin
+          perform public.rename_finance_workspace('00000000-0000-4000-8000-0000000000b1', '   ');
+          raise exception 'An empty name was accepted';
+        exception when invalid_parameter_value then null; end;
+        begin
+          perform public.rename_finance_workspace('00000000-0000-4000-8000-0000000000b1', repeat('x', 81));
+          raise exception 'A long name was accepted';
+        exception when invalid_parameter_value then null; end;
+        begin
+          perform public.rename_finance_workspace(public.ensure_personal_finance_workspace(), 'Renamed personal space');
+          raise exception 'A personal space was renamed';
+        exception when insufficient_privilege then null; end;
+      end $$;
+      select set_config('request.jwt.claim.sub', '', true);
+      do $$ begin
+        begin
+          perform public.rename_finance_workspace('00000000-0000-4000-8000-0000000000b1', 'No session');
+          raise exception 'Missing session accepted';
+        exception when insufficient_privilege then null; end;
+      end $$;
+      set local role anon;
+      do $$ begin
+        begin
+          perform public.rename_finance_workspace('00000000-0000-4000-8000-0000000000b1', 'Anonymous');
+          raise exception 'Anonymous access accepted';
+        exception when insufficient_privilege then null; end;
+      end $$;
+      rollback;
+    `);
+  }, 20_000);
 });

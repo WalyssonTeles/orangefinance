@@ -51,6 +51,22 @@ async function getConflict(work: () => Promise<void>): Promise<SyncConflict> {
 }
 
 describe("bidirectional synchronization", () => {
+  it("normalizes pre-1.1 account holders without conflicts and synchronizes ownership across devices", async () => {
+    const { a, b, remote } = await pair();
+    const account = (await a.accounts.toArray())[0];
+    for (const database of [a, b]) {
+      const connection = (await database.syncState.get("connection"))!;
+      const legacyBase = structuredClone(connection.base);
+      for (const row of legacyBase.accounts) Reflect.deleteProperty(row, "holderId");
+      await database.syncState.put({ ...connection, base: legacyBase });
+    }
+    await a.accounts.update(account.id, { holderId: "person-a", updatedAt: account.updatedAt + 1 });
+    await syncOnce("user-a", remote, a);
+    await syncOnce("user-a", remote, b);
+    expect((await b.accounts.get(account.id))?.holderId).toBe("person-a");
+    expect((await b.accounts.get(account.id))?.initialBalance).toBe(account.initialBalance);
+  });
+
   it("automatically connects a new account without asking about seeded starter data", async () => {
     const a = await device(), remote = memoryRemote();
     expect(hasUserData(await readSyncData(a))).toBe(false);

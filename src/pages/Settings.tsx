@@ -36,15 +36,17 @@ const SECTIONS: Section[] = [
 ];
 
 export function Settings() {
-  const { section } = useLocation();
+  const { section, params } = useLocation();
+  const sync = useSync();
   const current = SECTIONS.find((s) => s.id === section);
+  const spaceDetail = section === "compartilhado" && sync.spaces.some((space) => space.kind === "shared" && space.id === params.get("id"));
 
   if (current) {
     return (
       <div className="mx-auto max-w-2xl space-y-4">
         <header>
-          <a href="#/ajustes" className="-ml-2 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-brand-ink hover:bg-orange-soft">
-            <ChevronLeft size={18} /> Ajustes
+          <a href={spaceDetail ? "#/ajustes/compartilhado" : "#/ajustes"} className="-ml-2 inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold text-brand-ink hover:bg-orange-soft">
+            <ChevronLeft size={20} /> {spaceDetail ? "Voltar" : "Voltar para ajustes"}
           </a>
           <h1 className="mt-1 font-display text-[1.75rem] leading-tight font-bold tracking-tight sm:text-[2rem]">{current.title}</h1>
         </header>

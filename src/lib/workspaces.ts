@@ -63,3 +63,9 @@ export async function joinByCode(client: SupabaseClient, token: string, code: st
 export async function createSharedSpace(client: SupabaseClient, token: string, name: string): Promise<string> {
   return z.uuid().parse(await workspaceRpc(client, token, "create_family_workspace", { p_name: name.trim() }));
 }
+
+export async function renameSharedSpace(client: SupabaseClient, token: string, workspaceId: string, name: string): Promise<void> {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed.length > 80) throw new Error("O nome do espaço deve ter de 1 a 80 caracteres.");
+  await workspaceRpc(client, token, "rename_finance_workspace", { p_workspace: workspaceId, p_name: trimmed });
+}

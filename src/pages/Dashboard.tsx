@@ -87,7 +87,7 @@ export function Dashboard() {
             <SpaceSwitcher />
           </div>
         </div>
-        <MonthPicker month={month} onChange={setMonth} />
+        <MonthPicker month={month} onChange={setMonth} className="w-full sm:w-auto" />
       </header>
 
       {/* Hero */}
@@ -147,13 +147,31 @@ export function Dashboard() {
       {byPerson.length > 0 && (
         <Card>
           <CardHeader title="Por pessoa" />
-          <ul className="divide-y divide-line">
+          <ul className="grid gap-3 sm:grid-cols-2">
             {byPerson.map((person) => (
-              <li key={person.id || "none"} className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-0.5 py-2.5 text-sm sm:grid-cols-[1fr_auto_auto_auto]">
-                <span className="truncate font-semibold">{person.name}</span>
-                <Money cents={person.net} signed className={`text-right font-bold ${person.net < 0 ? "text-negative" : "text-positive"}`} />
-                <span className="text-muted sm:text-right">Receitas <Money cents={person.income} className="font-semibold text-positive" /></span>
-                <span className="text-right text-muted">Despesas <Money cents={person.expense} className="font-semibold text-ink" /></span>
+              <li key={person.id || "none"} className="min-w-0 rounded-xl border border-line bg-cream/40 p-2">
+                <button
+                  type="button"
+                  onClick={() => navigate("lancamentos", null, { titular: person.id || "__none__" })}
+                  className="min-h-11 w-full rounded-lg px-2 text-left font-semibold hover:bg-orange-soft"
+                  aria-label={`Ver lançamentos de ${person.name}`}
+                >{person.name}</button>
+                {[
+                  { label: "Receitas", type: "income", value: person.income, color: "text-positive" },
+                  { label: "Despesas", type: "expense", value: person.expense, color: "text-negative" },
+                  { label: "Total", type: "", value: person.net, color: person.net < 0 ? "text-negative" : "text-positive" },
+                ].map((row) => (
+                  <button
+                    key={row.label}
+                    type="button"
+                    aria-label={`Ver ${row.label.toLowerCase()} de ${person.name}`}
+                    onClick={() => navigate("lancamentos", null, { titular: person.id || "__none__", ...(row.type ? { tipo: row.type } : {}) })}
+                    className={`flex min-h-12 w-full flex-wrap items-center justify-between gap-x-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-orange-soft ${row.type ? "" : "border-t border-dashed border-line font-bold"}`}
+                  >
+                    <span>{row.label}</span>
+                    <Money cents={row.value} className={`ml-auto text-right font-semibold ${row.color}`} />
+                  </button>
+                ))}
               </li>
             ))}
           </ul>
@@ -200,23 +218,24 @@ export function Dashboard() {
                 </div>
               </Donut>
               <ul className="w-full min-w-0 flex-1 space-y-2">
-                {topCategories.map((c) => {
+                {stats.byCategory.map((c) => {
                   const category = c.categoryId ? categoryById.get(c.categoryId) : undefined;
                   return (
-                    <li key={c.categoryId ?? "none"} className="flex items-center gap-2.5">
+                    <li key={c.categoryId ?? "none"}>
+                      <button
+                        type="button"
+                        onClick={() => navigate("lancamentos", null, { tipo: "expense", categoria: c.categoryId ?? "__none__" })}
+                        className="flex min-h-12 w-full items-center gap-2.5 rounded-xl px-1 text-left transition-colors hover:bg-orange-soft"
+                        aria-label={`Ver despesas de ${category?.name ?? "Sem categoria"}`}
+                      >
                       <ColorIcon icon={categoryIcon(category?.icon)} color={category?.color ?? "#868E96"} size="sm" />
                       <span className="min-w-0 flex-1 truncate text-sm font-semibold">{category?.name ?? "Sem categoria"}</span>
                       <span className="text-xs text-muted tabular-nums">{Math.round(c.share * 100)}%</span>
                       <Money cents={c.total} className="shrink-0 text-right text-sm font-semibold" />
+                      </button>
                     </li>
                   );
                 })}
-                {otherShare > 0 && (
-                  <li className="flex items-center gap-2.5 pl-[2.6rem] text-sm text-muted">
-                    <span className="flex-1">Outras categorias</span>
-                    <Money cents={otherShare} className="shrink-0 text-right font-semibold" />
-                  </li>
-                )}
               </ul>
             </div>
           )}

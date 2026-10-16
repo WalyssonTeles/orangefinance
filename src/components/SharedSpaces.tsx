@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useMembers } from "../lib/hooks";
 import { navigate, useLocation } from "../lib/router";
 import {
-  createSharedSpace, fetchJoinCode, joinByCode, normalizeJoinCode, regenerateJoinCode, workspaceRpc,
+  createSharedSpace, fetchJoinCode, joinByCode, normalizeJoinCode, regenerateJoinCode, renameSharedSpace, workspaceRpc,
 } from "../lib/workspaces";
 import { useApp } from "../state";
 import { useSync } from "../sync-context";
@@ -28,7 +28,7 @@ export function SharedSpaces() {
   }
 
   const selected = selectedId ? sync.spaces.find((space) => space.id === selectedId && space.kind === "shared") : undefined;
-  return selected ? <SpaceDetail spaceId={selected.id} /> : <SpaceList />;
+  return selected ? <SpaceDetail key={selected.id} spaceId={selected.id} /> : <SpaceList />;
 }
 
 function SpaceList() {
@@ -166,6 +166,7 @@ function SpaceDetail({ spaceId }: { spaceId: string }) {
   const owner = space.role === "owner";
   const active = sync.activeSpace?.id === spaceId;
   const [code, setCode] = useState<string | null>(null);
+  const [name, setName] = useState(space.name);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -213,10 +214,24 @@ function SpaceDetail({ spaceId }: { spaceId: string }) {
 
   return (
     <>
-      <a href="#/ajustes/compartilhado" className="-mt-2 inline-flex text-sm font-semibold text-brand-ink hover:underline">← Todos os espaços</a>
       <Card>
         <CardHeader title={space.name} />
         <p className="text-sm text-muted">{owner ? "Você é o responsável por este espaço." : "Você participa deste espaço."}</p>
+        {owner && (
+          <form className="mt-4 space-y-3" onSubmit={(event) => {
+            event.preventDefault();
+            void run(async () => {
+              await sync.withSession((client, token) => renameSharedSpace(client, token, spaceId, name));
+              await sync.refreshSpaces();
+              notify("Nome do espaço atualizado.");
+            });
+          }}>
+            <Field label="Nome do espaço">
+              <input className={inputClass} value={name} required maxLength={80} onChange={(event) => setName(event.target.value)} />
+            </Field>
+            <Button type="submit" disabled={busy || !sync.online || !name.trim() || name.trim() === space.name}>Salvar nome</Button>
+          </form>
+        )}
         {!active && (
           <Button className="mt-3" disabled={sync.busy || sync.syncing} onClick={() => void run(() => sync.switchSpace(spaceId))}>
             Abrir este espaço

@@ -1,8 +1,8 @@
-import { Plus, Search, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Search, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Money } from "../components/Money";
 import { TransactionRow } from "../components/TransactionRow";
-import { Button, Card, EmptyState, inputClass, MonthPicker, PageHeader } from "../components/ui";
+import { Card, EmptyState, Field, inputClass, MonthPicker, PageHeader } from "../components/ui";
 import type { Transaction, TxType } from "../lib/db";
 import { dayLabel, monthLabel } from "../lib/dates";
 import { groupByDate, inMonth, matchesSearch, monthSummary } from "../lib/finance";
@@ -29,40 +29,64 @@ function matchesFilter(t: Transaction, filter: Filter): boolean {
 }
 
 export function Transactions() {
-  const { data, month, setMonth, openTransaction, sharedSpace, members, memberById } = useApp();
+  const { data, month, setMonth, sharedSpace, members, memberById } = useApp();
   const { params } = useLocation();
   const [query, setQuery] = useState("");
   const [filter, setFilterState] = useState<Filter>(() => filterFromParam(params.get("tipo")));
   const [accountId, setAccountId] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [holderId, setHolderId] = useState("");
+  const [categoryId, setCategoryId] = useState(() => params.get("categoria") ?? "");
+  const [holderId, setHolderId] = useState(() => params.get("titular") ?? "");
+
+  useEffect(() => {
+    setFilterState(filterFromParam(params.get("tipo")));
+    setCategoryId(params.get("categoria") ?? "");
+    setHolderId(params.get("titular") ?? "");
+  }, [params]);
+
+  const updateUrl = (type: Filter, holder: string, category: string) => {
+    replaceParams("lancamentos", null, {
+      ...(type !== "all" ? { tipo: type } : {}),
+      ...(holder ? { titular: holder } : {}),
+      ...(category ? { categoria: category } : {}),
+    });
+  };
+
+  const selectHolder = (next: string) => {
+    setHolderId(next);
+    updateUrl(filter, next, categoryId);
+  };
+  const selectCategory = (next: string) => {
+    setCategoryId(next);
+    updateUrl(filter, holderId, next);
+  };
 
   const setFilter = (next: Filter) => {
     setFilterState(next);
-    replaceParams("lancamentos", null, next === "all" ? {} : { tipo: next });
+    updateUrl(next, holderId, categoryId);
   };
 
   const monthTx = useMemo(() => data.transactions.filter((t) => inMonth(t, month)), [data.transactions, month]);
   const personTx = useMemo(
-    () => !sharedSpace || !holderId ? monthTx : monthTx.filter((t) => (holderId === NO_HOLDER ? !t.holderId : t.holderId === holderId)),
-    [monthTx, holderId, sharedSpace],
+    () => !sharedSpace || !holderId ? monthTx : monthTx.filter((t) => (holderId === NO_HOLDER ? !t.holderId || !memberById.has(t.holderId) : t.holderId === holderId)),
+    [monthTx, holderId, sharedSpace, memberById],
   );
   const summary = useMemo(() => monthSummary(personTx, month), [personTx, month]);
 
   // Only categories that appear in the entries currently on screen (month, person and type filters).
   const availableCategories = useMemo(() => {
     const used = new Set(personTx.filter((t) => matchesFilter(t, filter)).map((t) => t.categoryId).filter(Boolean));
-    if (categoryId) used.add(categoryId);
+    if (categoryId && categoryId !== "__none__") used.add(categoryId);
     return data.categories.filter((c) => used.has(c.id));
   }, [personTx, filter, categoryId, data.categories]);
-  const hasUnassigned = sharedSpace && monthTx.some((t) => !t.holderId);
+  const hasUnassigned = sharedSpace && monthTx.some((t) => !t.holderId || !memberById.has(t.holderId));
+  const hasUncategorized = personTx.some((t) => matchesFilter(t, filter) && !t.categoryId);
 
   const groups = useMemo(() => {
     const visible = personTx.filter(
       (t) =>
         matchesFilter(t, filter) &&
         (!accountId || t.accountId === accountId || t.toAccountId === accountId) &&
-        (!categoryId || t.categoryId === categoryId) &&
+        (!categoryId || (categoryId === "__none__" ? !t.categoryId : t.categoryId === categoryId)) &&
         matchesSearch(t, query, data.categoryById),
     );
     return groupByDate(visible);
@@ -74,14 +98,8 @@ export function Transactions() {
     <div>
       <PageHeader
         title="Lançamentos"
-        actions={
-          <>
-            <MonthPicker month={month} onChange={setMonth} />
-            <Button className="hidden lg:inline-flex" onClick={() => openTransaction()}>
-              <Plus size={18} /> Novo
-            </Button>
-          </>
-        }
+        actionsClassName="w-full sm:w-80"
+        actions={<MonthPicker month={month} onChange={setMonth} className="w-full" />}
       />
 
       <div className="mb-4 overflow-hidden rounded-2xl border border-line bg-surface min-[400px]:grid min-[400px]:grid-cols-3 min-[400px]:gap-2 min-[400px]:overflow-visible min-[400px]:border-0 min-[400px]:bg-transparent sm:gap-3">
@@ -102,7 +120,8 @@ export function Transactions() {
 
       <Card className="p-3 sm:p-4">
         <div className="space-y-3">
-          <div className="relative">
+          <Field label="Buscar Lançamentos">
+            <div className="relative">
             <Search size={18} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted" />
             <input
               type="search"
@@ -111,8 +130,11 @@ export function Transactions() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
-          </div>
-          <div className="drag-row flex gap-2 overflow-x-auto pb-1">
+            </div>
+          </Field>
+          <fieldset className="min-w-0">
+            <legend className="mb-1.5 text-sm font-semibold text-muted">Tipo de Lançamento</legend>
+            <div className="drag-row flex gap-2 overflow-x-auto pb-1">
             {FILTERS.map((f) => (
               <button
                 key={f.value}
@@ -126,9 +148,12 @@ export function Transactions() {
                 {f.label}
               </button>
             ))}
-          </div>
-          {sharedSpace && members.length > 0 && (
-            <div className="drag-row flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filtrar por pessoa">
+            </div>
+          </fieldset>
+          {sharedSpace && (
+            <fieldset className="min-w-0">
+              <legend className="mb-1.5 text-sm font-semibold text-muted">Titular</legend>
+              <div className="drag-row flex gap-2 overflow-x-auto pb-1">
               {[{ id: "", name: "Todos" }, ...members.map((m) => ({ id: m.userId, name: m.name })),
                 ...(hasUnassigned ? [{ id: NO_HOLDER, name: "Sem titular" }] : []),
                 ...(holderId && holderId !== NO_HOLDER && !memberById.has(holderId) ? [{ id: holderId, name: "Ex-participante" }] : [])]
@@ -137,7 +162,7 @@ export function Transactions() {
                     key={person.id || "all"}
                     type="button"
                     aria-pressed={holderId === person.id}
-                    onClick={() => setHolderId(person.id)}
+                    onClick={() => selectHolder(person.id)}
                     className={`h-9 shrink-0 rounded-full border px-3.5 text-sm font-semibold transition-colors ${
                       holderId === person.id ? "border-brand bg-orange-soft text-brand-ink" : "border-line text-muted hover:text-ink"
                     }`}
@@ -145,25 +170,31 @@ export function Transactions() {
                     {person.name}
                   </button>
                 ))}
-            </div>
+              </div>
+            </fieldset>
           )}
           <div className="grid gap-2 sm:grid-cols-2">
-            <select aria-label="Filtrar por conta" className={inputClass} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+            <Field label="Contas e Cartões">
+            <select className={inputClass} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
               <option value="">Todas as contas</option>
               {data.accounts.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.name}
+                  {a.name}{sharedSpace && a.holderId ? ` · ${memberById.get(a.holderId)?.name ?? "Ex-participante"}` : ""}
                 </option>
               ))}
             </select>
-            <select aria-label="Filtrar por categoria" className={inputClass} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            </Field>
+            <Field label="Categoria">
+            <select className={inputClass} value={categoryId} onChange={(e) => selectCategory(e.target.value)}>
               <option value="">{availableCategories.length ? "Todas as categorias" : "Nenhuma categoria nesta lista"}</option>
+              {(hasUncategorized || categoryId === "__none__") && <option value="__none__">Sem categoria</option>}
               {availableCategories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}{filter === "all" || filter === "pending" ? ` (${c.kind === "income" ? "receita" : "despesa"})` : ""}
                 </option>
               ))}
             </select>
+            </Field>
           </div>
           {filtered && (
             <button
@@ -174,6 +205,7 @@ export function Transactions() {
                 setAccountId("");
                 setCategoryId("");
                 setHolderId("");
+                updateUrl("all", "", "");
               }}
               className="inline-flex items-center gap-1 text-sm font-semibold text-brand-ink hover:underline"
             >
@@ -187,13 +219,6 @@ export function Transactions() {
             <EmptyState
               title={filtered ? "Nada encontrado" : "Nenhum lançamento"}
               text={filtered ? "Tente outros filtros ou termos de busca." : `Você ainda não tem lançamentos em ${monthLabel(month).toLowerCase()}.`}
-              action={
-                !filtered && (
-                  <Button onClick={() => openTransaction()}>
-                    <Plus size={18} /> Novo lançamento
-                  </Button>
-                )
-              }
             />
           ) : (
             groups.map(([date, items]) => (

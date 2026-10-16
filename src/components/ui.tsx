@@ -1,6 +1,5 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { currentMonth, monthLabel, shiftMonth } from "../lib/dates";
+export { MonthPicker } from "./MonthPicker";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <section className={`rounded-2xl border border-line bg-surface p-4 sm:p-5 ${className}`}>{children}</section>;
@@ -54,37 +53,15 @@ export function IconButton({
   );
 }
 
-export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
+export function PageHeader({ title, subtitle, actions, actionsClassName = "" }: { title: string; subtitle?: ReactNode; actions?: ReactNode; actionsClassName?: string }) {
   return (
     <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0">
         <h1 className="font-display text-[1.75rem] leading-tight font-bold tracking-tight sm:text-[2rem]">{title}</h1>
         {subtitle && <div className="mt-1 text-muted">{subtitle}</div>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className={`flex flex-wrap items-center gap-2 ${actionsClassName}`}>{actions}</div>}
     </header>
-  );
-}
-
-export function MonthPicker({ month, onChange }: { month: string; onChange: (month: string) => void }) {
-  const isCurrent = month === currentMonth();
-  return (
-    <div className="inline-flex h-11 items-center rounded-xl border border-line bg-surface">
-      <IconButton label="Mês anterior" onClick={() => onChange(shiftMonth(month, -1))}>
-        <ChevronLeft size={18} />
-      </IconButton>
-      <button
-        type="button"
-        onClick={() => onChange(currentMonth())}
-        title={isCurrent ? undefined : "Voltar para o mês atual"}
-        className="min-w-[9.5rem] px-1 text-center text-[0.95rem] font-semibold"
-      >
-        {monthLabel(month)}
-      </button>
-      <IconButton label="Próximo mês" onClick={() => onChange(shiftMonth(month, 1))}>
-        <ChevronRight size={18} />
-      </IconButton>
-    </div>
   );
 }
 

@@ -224,7 +224,7 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
             <select className={inputClass} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
               {data.accounts.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.name}
+                  {a.name}{sharedSpace && a.holderId ? ` · ${memberById.get(a.holderId)?.name ?? "Ex-participante"}` : ""}
                 </option>
               ))}
             </select>
@@ -234,7 +234,7 @@ export function TransactionForm({ request, onClose }: { request: TransactionRequ
               <select className={inputClass} value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}>
                 {data.accounts.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name}
+                    {a.name}{sharedSpace && a.holderId ? ` · ${memberById.get(a.holderId)?.name ?? "Ex-participante"}` : ""}
                   </option>
                 ))}
               </select>

@@ -21,6 +21,8 @@ export interface Account extends SyncRecord {
   /** Opening balance. For credit cards a negative value is an open invoice. */
   initialBalance: number;
   creditLimit: number | null;
+  /** Optional owner in shared spaces; absent on accounts created before 1.1. */
+  holderId?: string | null;
 }
 
 export interface Category extends SyncRecord {

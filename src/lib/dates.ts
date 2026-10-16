@@ -22,6 +22,11 @@ export function currentMonth(): string {
   return monthOf(todayISO());
 }
 
+export function yearPage(year: number, currentYear = new Date().getFullYear()): number[] {
+  const end = currentYear + Math.ceil((year - currentYear) / 12) * 12;
+  return Array.from({ length: 12 }, (_, index) => end - 11 + index);
+}
+
 export function shiftMonth(month: string, delta: number): string {
   const [y, m] = month.split("-").map(Number);
   const d = new Date(y, m - 1 + delta, 1);

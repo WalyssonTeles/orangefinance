@@ -22,6 +22,7 @@ export const backupSchema = z.object({
     color: z.string(),
     initialBalance: integer,
     creditLimit: integer.nullable(),
+    holderId: id.nullable().default(null),
   })),
   categories: z.array(z.looseObject({
     ...syncFields,

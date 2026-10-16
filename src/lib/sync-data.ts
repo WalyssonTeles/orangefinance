@@ -41,7 +41,9 @@ export function parseSyncData(value: unknown): SyncData {
 export function hasUserData(data: SyncData): boolean {
   if (data.transactions.length || data.budgets.length || data.settings.some((setting) => setting.value.trim() !== "")) return true;
   if (data.accounts.length === 0 && data.categories.length === 0) return false;
-  const accounts = data.accounts.map(({ id: _id, createdAt: _created, updatedAt: _updated, ...fields }) => fields);
+  const accounts = data.accounts.map(({ id: _id, createdAt: _created, updatedAt: _updated, holderId, ...fields }) => ({
+    ...fields, ...(holderId ? { holderId } : {}),
+  }));
   const categories = data.categories.map(({ id: _id, createdAt: _created, updatedAt: _updated, ...fields }) => stable(fields)).sort();
   return stable(accounts) !== stable([{ ...DEFAULT_ACCOUNT, deletedAt: null }]) ||
     stable(categories) !== stable(DEFAULT_CATEGORIES.map((category) => stable({ ...category, deletedAt: null })).sort());

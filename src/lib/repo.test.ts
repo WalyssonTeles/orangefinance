@@ -11,6 +11,7 @@ import {
   importBackup,
   parseBackup,
   restoreTransactions,
+  saveAccount,
   seedDefaults,
   updateTransaction,
 } from "./repo";
@@ -132,5 +133,26 @@ describe("repository", () => {
     const future = JSON.parse(JSON.stringify(await exportBackup(db)));
     future.transactions[0].futureField = "preserved";
     expect((parseBackup(JSON.stringify(future)).transactions[0] as unknown as Record<string, unknown>).futureField).toBe("preserved");
+  });
+
+  it("imports pre-1.1 accounts without a holder and preserves every existing balance and transaction", async () => {
+    await createTransaction(await draft(), undefined, db);
+    const legacy = JSON.parse(JSON.stringify(await exportBackup(db)));
+    for (const account of legacy.accounts) delete account.holderId;
+    const parsed = parseBackup(JSON.stringify(legacy));
+    expect(parsed.accounts.every((account) => account.holderId === null)).toBe(true);
+    await importBackup(parsed, db);
+    expect((await exportBackup(db)).transactions).toEqual(parsed.transactions);
+    expect((await db.accounts.toArray()).map((account) => account.initialBalance)).toEqual(legacy.accounts.map((account: { initialBalance: number }) => account.initialBalance));
+  });
+
+  it("round-trips account holders without reassigning existing transactions", async () => {
+    const [txId] = await createTransaction({ ...await draft(), holderId: "person-a" }, undefined, db);
+    const account = await firstAccount();
+    await saveAccount({ ...account, holderId: "person-b" }, db);
+    const backup = parseBackup(JSON.stringify(await exportBackup(db)));
+    await importBackup(backup, db);
+    expect((await db.accounts.get(account.id))?.holderId).toBe("person-b");
+    expect((await db.transactions.get(txId))?.holderId).toBe("person-a");
   });
 });
