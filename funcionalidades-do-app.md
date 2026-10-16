@@ -1,9 +1,19 @@
 # Orange Finance — Funcionalidades do app
 
-> **Versão 1.2.2**
+> **Versão 1.2.3**
 > Este arquivo descreve o que o app **já faz hoje**.
 > No final há um espaço para você escrever as funcionalidades que deseja nas próximas versões.
-> As versões anteriores são preservadas nas tags `v0.1.0`, `v1.0.0`, `v1.1.0`, `v1.2.0` e `v1.2.1`.
+> As versões anteriores são preservadas nas tags `v0.1.0`, `v1.0.0`, `v1.1.0`, `v1.2.0`, `v1.2.1` e `v1.2.2`.
+
+---
+
+## Versão 1.2.3 — ajustes visuais
+
+- Itens de lançamentos sem o contorno colorido das ações de swipe recolhidas; arrastar e foco de teclado preservados.
+- Busca fora do card de filtros, sempre visível entre os filtros e os lançamentos. Limpar filtros não apaga o termo da busca.
+- Ordenação à esquerda e Exibir/Ocultar filtros à direita.
+- Valores com atalhos da inicial sem sublinhado, mantendo os mesmos destinos.
+- Formas de pagamento e vouchers não foram alterados nesta versão. Sem mudança de dados ou migração de banco.
 
 ---
 

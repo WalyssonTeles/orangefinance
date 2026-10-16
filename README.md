@@ -101,6 +101,14 @@ Nos espaços compartilhados, cada lançamento tem um **Titular** (por padrão, q
 
 Na versão **1.1**, contas e cartões também podem ter um titular, sem alterar a titularidade dos lançamentos. O resumo por pessoa funciona como um comprovante com atalhos para os filtros de Lançamentos; gastos por categoria também abrem a lista filtrada. O seletor de período permite escolher meses e páginas de 12 anos, com tela cheia no celular. Os filtros têm labels visíveis e Ajustes tem um único retorno por nível, com alvo de toque ampliado.
 
+### Versão 1.2.3
+
+- Busca sempre visível fora do card de filtros, entre os filtros e a lista. Buscar não marca os filtros como ativos; limpar filtros mantém o termo pesquisado.
+- Ordenação à esquerda e Exibir/Ocultar filtros à direita.
+- Ações de swipe ficam transparentes quando recolhidas, eliminando o contorno colorido nos itens sem remover o foco de teclado.
+- Valores interativos da inicial continuam sendo link buttons, agora sem sublinhado.
+- Formas de pagamento e vouchers permanecem como antes, sem alteração dos dados nem nova migração.
+
 ### Versão 1.2.2
 
 - Somente os controles ativam campos, radios e switches; títulos e hints não encaminham cliques. Os nomes acessíveis são preservados. Na inicial, os valores com atalhos são link buttons, sem tornar o card inteiro clicável.

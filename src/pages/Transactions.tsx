@@ -125,7 +125,8 @@ export function Transactions() {
     return groupByDate(visible, ascending);
   }, [personTx, filter, accountId, categoryId, query, data.categoryById, ascending]);
 
-  const filtered = query || filter !== "all" || accountId || categoryId || holderId;
+  const filtersActive = filter !== "all" || Boolean(accountId || categoryId || holderId);
+  const filtered = Boolean(query) || filtersActive;
   const submitSearch = () => {
     searchRef.current?.blur();
     requestAnimationFrame(() => listRef.current?.scrollIntoView({ block: "start", behavior: "smooth" }));
@@ -159,24 +160,10 @@ export function Transactions() {
 
       <Card className="p-3 sm:p-4">
         <div className="flex items-center justify-between gap-3">
-          <button type="button" aria-expanded={expanded} aria-controls="transaction-filters" onClick={() => setExpanded((previous) => !previous)} className="text-sm font-semibold text-brand-ink hover:underline">{expanded ? "Ocultar filtros" : "Exibir Filtros"}{filtered ? " · ativos" : ""}</button>
           <button type="button" aria-label={ascending ? "Ordenar do mais recente para o mais antigo" : "Ordenar do mais antigo para o mais recente"} title={ascending ? "Mais antigos primeiro" : "Mais recentes primeiro"} aria-pressed={ascending} onClick={() => setAscending((previous) => !previous)} className="flex h-10 items-center gap-2 rounded-xl px-3 text-sm text-muted hover:bg-cream"><ArrowDownUp size={18} /><span className="hidden sm:inline">{ascending ? "Mais antigos" : "Mais recentes"}</span></button>
+          <button type="button" aria-expanded={expanded} aria-controls="transaction-filters" onClick={() => setExpanded((previous) => !previous)} className="text-sm font-semibold text-brand-ink hover:underline">{expanded ? "Ocultar filtros" : "Exibir Filtros"}{filtersActive ? " · ativos" : ""}</button>
         </div>
         <div id="transaction-filters" hidden={!expanded} className="mt-3 space-y-3">
-          <Field label="Buscar Lançamentos">
-            <form role="search" aria-label="Buscar lançamentos" className="relative" onSubmit={(event) => { event.preventDefault(); submitSearch(); }}>
-            <button type="submit" aria-label="Buscar lançamentos" className="absolute top-0 left-0 grid size-11 place-items-center rounded-l-xl text-muted hover:text-brand-ink focus-visible:outline-2 focus-visible:outline-orange"><Search size={18} aria-hidden="true" /></button>
-            <input
-              ref={searchRef}
-              type="search"
-              enterKeyHint="search"
-              className={`${inputClass} pl-11`}
-              placeholder="Buscar lançamentos"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-            </form>
-          </Field>
           <fieldset className="min-w-0">
             <legend className="mb-1.5 text-sm font-semibold text-muted">Tipo de Lançamento</legend>
             <div className="drag-row flex gap-2 overflow-x-auto pb-1">
@@ -233,11 +220,10 @@ export function Transactions() {
             ]} />
             </Field>
           </div>
-          {filtered && (
+          {filtersActive && (
             <button
               type="button"
               onClick={() => {
-                setQuery("");
                 setFilter("all");
                 setAccountId("");
                 setCategoryId("");
@@ -251,6 +237,22 @@ export function Transactions() {
           )}
         </div>
       </Card>
+      <div className="mt-4">
+        <Field label="Buscar Lançamentos">
+          <form role="search" aria-label="Buscar lançamentos" className="relative" onSubmit={(event) => { event.preventDefault(); submitSearch(); }}>
+            <button type="submit" aria-label="Buscar lançamentos" className="absolute top-0 left-0 grid size-11 place-items-center rounded-l-xl text-muted hover:text-brand-ink focus-visible:outline-2 focus-visible:outline-orange"><Search size={18} aria-hidden="true" /></button>
+            <input
+              ref={searchRef}
+              type="search"
+              enterKeyHint="search"
+              className={`${inputClass} pl-11`}
+              placeholder="Buscar lançamentos"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </form>
+        </Field>
+      </div>
       <div ref={listRef} className="mt-4 scroll-mt-[calc(var(--transactions-header-height,0px)+5rem)] lg:scroll-mt-5" tabIndex={-1} role="region" aria-label="Lista de lançamentos">
       <Card className="p-3 sm:p-4">
         <div className="pt-1">

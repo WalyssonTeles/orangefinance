@@ -25,7 +25,7 @@ import { useApp } from "../state";
 import { useSync } from "../sync-context";
 import { SpaceSwitcher } from "../components/SpaceSwitcher";
 
-const VALUE_LINK = "max-w-full rounded-md text-left underline decoration-1 underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current";
+const VALUE_LINK = "max-w-full rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current";
 
 function greeting() {
   const hour = new Date().getHours();

@@ -133,7 +133,7 @@ export function TransactionRow({ tx, showDate }: { tx: Transaction; showDate?: s
   return (
     <div className="relative overflow-hidden rounded-xl">
       {/* Touch drawer revealed by swiping left. */}
-      <div className="absolute inset-y-0 right-0 flex [@media(hover:hover)]:hidden" style={{ width: DRAWER }} aria-hidden={!open}>
+      <div className={`absolute inset-y-0 right-0 flex transition-opacity duration-200 [@media(hover:hover)]:hidden ${open ? "opacity-100" : "pointer-events-none opacity-0"}`} style={{ width: DRAWER }} aria-hidden={!open}>
         <button
           type="button"
           tabIndex={open ? 0 : -1}
