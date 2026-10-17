@@ -86,6 +86,23 @@ Sem sincronização configurada, o modo local continua disponível. Para transfe
 
 Exporte também um backup antes de trocar de navegador, limpar os dados do site ou migrar de `localhost` para o endereço publicado. O arquivo contém informações financeiras e não deve ser publicado no GitHub.
 
+### Planilha Google (espelho em teste)
+
+Em **Ajustes → Backup e dados → Planilha**, o espaço aberto pode gerar uma nova planilha Google a partir do modelo XLSX individual ou compartilhado da pasta `Instructions`. A planilha simples criada em testes anteriores permanece intacta. O app continua lendo e gravando no IndexedDB; o **Supabase ainda é a sincronização principal**. O envio ao Sheets ocorre somente ao tocar em **Criar planilha com modelo** ou **Atualizar planilha com modelo**, não automaticamente. Edições feitas na planilha não retornam ao app.
+
+O Dashboard convertido inclui filtros de ano, mês, conta e, no compartilhado, titular. Em Lançamentos, valores são exibidos em reais; os centavos e os campos completos do app permanecem em colunas técnicas ocultas. Parcelas, frequência, repetição, ocorrências e intervalo personalizado aparecem em colunas visíveis. Use **Conferir planilha** para comparar contagens e totais por conta, mês e tipo; no compartilhado a comparação também considera o titular. A conversão de fórmulas e gráficos do Excel é feita pelo Google: confira o resultado antes de depender dele.
+
+No espaço compartilhado, somente o responsável cria e atualiza o espelho. Em cada envio, o app consulta no Supabase os e-mails verificados dos participantes, concede a eles permissão `reader` no Google Drive e registra o ID da planilha no espaço. Os participantes encontram o mesmo arquivo em **Ajustes → Backup e dados → Planilha** e podem abri-lo somente para leitura; a função geral de participantes continua sem expor e-mails. Novos participantes recebem acesso quando o responsável atualiza a planilha novamente. Mantenha também backups JSON independentes.
+
+Esse fluxo requer a migração Supabase `202610170001_sheets_mirror.sql`. O vínculo remoto guarda apenas o ID do arquivo; tokens Google continuam apenas na memória do navegador e e-mails não são persistidos no IndexedDB. No Dashboard, a faixa visual vazia `O1:U84` usa o fundo `#fbf7f4` sem ampliar a grade da planilha.
+
+### Versão 1.3.0
+
+- Planilhas individuais e compartilhadas geradas a partir dos modelos XLSX, com Dashboard, seletores e envio/conferência manuais.
+- No espaço compartilhado, o responsável registra a planilha no Supabase e concede aos e-mails verificados dos participantes acesso somente leitura pelo Google Drive. Participantes abrem o mesmo arquivo pelo app.
+- A área vazia do Dashboard da coluna O em diante recebe o fundo `#fbf7f4`, limitado às células existentes do layout.
+- Supabase permanece como sincronização principal. Esta versão não ativa edição bidirecional nem envio automático ao Google Sheets; isso continua fora da Fase 1A.
+
 ### Finanças pessoais e familiares
 
 Cada conta possui um espaço **Pessoal**, que não pode receber participantes. Em **Ajustes → Espaço compartilhado → Criar novo**, crie um espaço separado, por exemplo “Nossa família”. O espaço novo começa com categorias e uma conta inicial, **sem copiar as finanças pessoais**. Na tela inicial, a seta ao lado do nome do espaço troca entre Pessoal e os compartilhados.
@@ -177,6 +194,14 @@ Este projeto é **Vite/React**, não Next.js. Não usa `@supabase/ssr`, middlewa
 3. Execute `npm test` e `npm run build:pages`; só então publique o código. O workflow de `main` publica automaticamente, portanto não envie a release para `main` antes da etapa anterior.
 4. Atualize os aparelhos/PWAs e confira saldos, espaços e um ciclo de fatura. A API anterior continua aceitando espaços legados; após usar campos da 1.2 naquele espaço, aparelhos antigos recebem uma mensagem para atualizar em vez de sobrescrever novas regras. Alterações locais são mantidas. Conflitos offline entre pagamento e compras da mesma fatura pausam a sincronização com orientação para reabrir e reconciliar, sem substituição silenciosa.
 5. Não faça downgrade direto do banco IndexedDB 5 para a 1.1: a versão antiga não abre o banco mais novo. Tags permitem recuperar o código, não desfazer dados. Para contingência, preserve o banco/backup, mantenha a migração SQL e publique uma correção compatível com o esquema 5; restaurar um backup antigo requer confirmação e também se propaga pela sincronização.
+
+**Atualização 1.2.3 → 1.3.0 — ordem obrigatória de publicação:**
+
+1. Exporte backups JSON dos espaços que precisam de uma cópia independente.
+2. No projeto Supabase usado pelo app, execute [a migração da 1.3](./supabase/migrations/202610170001_sheets_mirror.sql) antes de publicar o frontend. Ela adiciona o vínculo da planilha compartilhada e RPCs com acesso restrito ao responsável/membros; não altera os dados financeiros. É reaplicável e solicita a atualização do cache da API.
+3. Execute `npm test` e `npm run build:pages`; só então publique o código. O workflow de `main` publica automaticamente, portanto não envie a release para `main` antes da migração.
+4. Depois da publicação, o responsável deve atualizar a planilha compartilhada uma vez para registrar o vínculo e conceder leitura aos participantes atuais. Novos participantes recebem leitura na próxima atualização manual do responsável.
+5. A planilha continua sendo um espelho manual e unidirecional; não remova as integrações Supabase nem trate esta versão como Fase 1B.
 
 Somente a URL e a chave **publishable** podem ser incorporadas no navegador. Nunca use senha do banco, chave secreta, `service_role` ou token administrativo em variáveis `VITE_*`. A chave pública não é uma autorização para ler os dados: as políticas do banco são obrigatórias. Não remova a RLS nem conceda acesso a `anon` para contornar erros.
 

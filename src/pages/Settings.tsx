@@ -9,6 +9,7 @@ import { categoryIcon, ColorIcon } from "../components/icons";
 import { Logo } from "../components/Logo";
 import { SharedSpaces } from "../components/SharedSpaces";
 import { SyncPanel } from "../components/SyncPanel";
+import { SheetsMirrorPanel } from "../components/SheetsMirrorPanel";
 import { Button, Card, CardHeader, DatePicker, Field, inputClass, Segmented, Switch } from "../components/ui";
 import { db, type Category, type CategoryKind } from "../lib/db";
 import { downloadBackup } from "../lib/download-backup";
@@ -40,20 +41,35 @@ const SECTIONS: Section[] = [
 export function Settings() {
   const { section, params } = useLocation();
   const sync = useSync();
-  const current = SECTIONS.find((s) => s.id === section);
+  const current = section === "planilha"
+    ? { id: "planilha", title: "Planilha", render: () => <SpreadsheetSection /> }
+    : SECTIONS.find((s) => s.id === section);
   const spaceDetail = section === "compartilhado" && sync.spaces.some((space) => space.kind === "shared" && space.id === params.get("id"));
 
   if (current) {
     return (
       <div className="mx-auto max-w-2xl space-y-4">
         <header>
-          <a href={spaceDetail ? "#/ajustes/compartilhado" : "#/ajustes"} className="-ml-2 inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold text-brand-ink hover:bg-orange-soft">
-            <ChevronLeft size={20} /> {spaceDetail ? "Voltar" : "Voltar para ajustes"}
+          <a href={spaceDetail ? "#/ajustes/compartilhado" : section === "planilha" ? "#/ajustes/backup" : "#/ajustes"} className="-ml-2 inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold text-brand-ink hover:bg-orange-soft">
+            <ChevronLeft size={20} /> {section === "planilha" ? "Voltar para Backup e dados" : spaceDetail ? "Voltar" : "Voltar para ajustes"}
           </a>
           <h1 className="mt-1 font-display text-[1.75rem] leading-tight font-bold tracking-tight sm:text-[2rem]">{current.title}</h1>
         </header>
         {current.render()}
       </div>
+    );
+  }
+
+  function SpreadsheetSection() {
+    const sync = useSync();
+    return (
+      <Card>
+        {sync.bound && sync.session && sync.activeSpace
+          ? <SheetsMirrorPanel key={sync.activeSpace.id} userId={sync.session.user.id} space={sync.activeSpace} />
+          : <p className="text-sm text-muted">
+            Entre com sua conta em Conta e sincronização para acessar a planilha do espaço ativo.
+          </p>}
+      </Card>
     );
   }
 
@@ -286,6 +302,17 @@ function BackupSection() {
             </div>
           </div>
         )}
+      </Card>
+
+      <Card>
+        <CardHeader title="Planilha" />
+        <p className="mb-4 text-sm text-muted">
+          Crie uma cópia dos seus dados no Google Sheets usando o modelo com Dashboard da pasta Instructions.
+          A planilha simples criada anteriormente permanece intacta.
+        </p>
+        <Button variant="secondary" onClick={() => navigate("ajustes", "planilha")}>
+          Abrir planilha <ChevronRight size={18} />
+        </Button>
       </Card>
 
       <Card>

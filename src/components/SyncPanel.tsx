@@ -3,6 +3,7 @@ import { downloadBackup } from "../lib/download-backup";
 import { supabaseConfigError } from "../lib/supabase";
 import { useSync } from "../sync-context";
 import { Button, Card, CardHeader } from "./ui";
+import { clearSheetsToken } from "../lib/google-sheets-auth";
 
 export function SyncPanel({ onboarding = false }: { onboarding?: boolean }) {
   const sync = useSync();
@@ -104,7 +105,10 @@ export function SyncPanel({ onboarding = false }: { onboarding?: boolean }) {
                 </>
               )}
               {sync.bound && <p className="text-xs text-muted">Ao sair, alterações ainda não enviadas ficam neste aparelho. Entre novamente na mesma conta para retomá-las.</p>}
-              <Button variant="ghost" disabled={sync.busy || sync.syncing} onClick={() => void sync.signOut()}>Sair desta conta neste aparelho</Button>
+              <Button variant="ghost" disabled={sync.busy || sync.syncing} onClick={() => {
+                clearSheetsToken();
+                void sync.signOut();
+              }}>Sair desta conta neste aparelho</Button>
             </>
           )}
           {(sync.error || backupError) && <p role="alert" className="break-words text-sm text-negative">{sync.error || backupError}</p>}

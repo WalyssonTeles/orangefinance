@@ -1,9 +1,20 @@
 # Orange Finance — Funcionalidades do app
 
-> **Versão 1.2.3**
+> **Versão 1.3.0**
 > Este arquivo descreve o que o app **já faz hoje**.
 > No final há um espaço para você escrever as funcionalidades que deseja nas próximas versões.
-> As versões anteriores são preservadas nas tags `v0.1.0`, `v1.0.0`, `v1.1.0`, `v1.2.0`, `v1.2.1` e `v1.2.2`.
+> As versões anteriores são preservadas nas tags `v0.1.0`, `v1.0.0`, `v1.1.0`, `v1.2.0`, `v1.2.1`, `v1.2.2` e `v1.2.3`.
+
+---
+
+## Versão 1.3.0 — espelho Google Sheets
+
+- Planilhas individuais e compartilhadas criadas a partir dos modelos da pasta `Instructions`, com Dashboard, filtros por período/conta e filtros por titular nos espaços compartilhados.
+- Envio e conferência manuais; o responsável é o único que atualiza a planilha compartilhada.
+- O responsável concede acesso `reader` aos participantes com e-mail verificado. Participantes localizam o mesmo arquivo pelo app e o abrem somente para leitura.
+- E-mails não são expostos pela listagem comum de participantes nem persistidos no dispositivo. O vínculo da planilha compartilhada é armazenado no Supabase após a migração 1.3.
+- A área vazia do Dashboard a partir da coluna O usa fundo `#fbf7f4` sem ampliar desnecessariamente a planilha.
+- Supabase continua sendo a sincronização principal. Sem edição bidirecional ou atualização automática do Sheets nesta versão.
 
 ---
 
@@ -190,7 +201,10 @@ A tela Ajustes mostra um **menu**; cada item abre sua própria tela, com o botã
 - **Preferências**: ocultar valores ao abrir o app (privacidade). O botão de olho também oculta e mostra os valores a qualquer momento.
 - **Categorias**: 12 de despesa e 5 de receita já vêm prontas. É possível criar, renomear, trocar ícone (41 opções) e cor (18 opções) e excluir as que não são usadas em lançamentos.
 - **Retorno**: uma ação por nível, “Voltar para ajustes” nas seções e “Voltar” nos detalhes de um espaço, com altura mínima de 48 px.
-- **Backup e dados**: exportar e importar o espaço aberto em `.json` e apagar todos os dados, com confirmação.
+- **Backup e dados**: exportar e importar o espaço aberto em `.json`, apagar todos os dados com confirmação e abrir **Planilha**.
+  - Espelho Google Sheets em teste: cria uma nova planilha com o modelo individual ou compartilhado, preserva a planilha simples anterior e permite envio e conferência manuais. No compartilhado, somente o responsável envia; o app concede automaticamente permissão de leitura no Google Drive aos participantes com e-mail verificado e publica o mesmo vínculo para os membros do espaço.
+  - Participantes abrem a planilha compartilhada em modo somente leitura. Novos membros recebem acesso na próxima atualização feita pelo responsável; os e-mails são consultados por uma função restrita ao responsável e não são guardados no dispositivo.
+  - Dashboard com seletores de ano, mês, conta e titular (compartilhado); Lançamentos exibe parcelas, frequência, repetição e ocorrências. O Supabase continua sincronizando os aparelhos; a planilha não importa edições nem recebe atualizações automáticas nesta etapa.
 - Versão do app no fim do menu.
 
 ---
