@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => ({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg", "apple-touch-icon-180x180.png"],
+      includeAssets: ["orange-finance-symbol.svg", "apple-touch-icon-180x180.png"],
       manifest: {
         name: "Orange Finance",
         short_name: "Orange Finance",

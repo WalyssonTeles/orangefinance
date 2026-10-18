@@ -21,7 +21,7 @@ npm run dev        # http://localhost:5180 com recarregamento automático
 npm test           # testes unitários (Vitest)
 npm run build      # checagem de tipos + build de produção com service worker
 npm run preview    # serve o build em http://localhost:5180
-npm run icons      # regenera os ícones PWA a partir de public/favicon.svg
+npm run icons      # regenera os ícones PWA a partir de public/orange-finance-icon.svg
 ```
 
 > **Importante:** os dados do IndexedDB pertencem ao endereço exato. `localhost:5180` e `127.0.0.1:5180` são “sites” diferentes e não compartilham dados. Por isso o projeto usa sempre a porta **5180**, tanto no `dev` quanto no `preview`.
@@ -102,6 +102,11 @@ Esse fluxo requer a migração Supabase `202610170001_sheets_mirror.sql`. O vín
 - No espaço compartilhado, o responsável registra a planilha no Supabase e concede aos e-mails verificados dos participantes acesso somente leitura pelo Google Drive. Participantes abrem o mesmo arquivo pelo app.
 - A área vazia do Dashboard da coluna O em diante recebe o fundo `#fbf7f4`, limitado às células existentes do layout.
 - Supabase permanece como sincronização principal. Esta versão não ativa edição bidirecional nem envio automático ao Google Sheets; isso continua fora da Fase 1A.
+
+### Versão 1.3.1
+
+- Atualiza o logo do cabeçalho e o ícone de carregamento com o Symbol; o favicon da aba também usa o Symbol.
+- Atualiza os ícones de instalação do app no celular com o Icon. Sem mudança de dados ou migração de banco.
 
 ### Finanças pessoais e familiares
 
@@ -250,7 +255,8 @@ src/
     hooks.ts / router.ts  leitura reativa do banco e navegação por hash
   components/             formulários, modal/folha inferior, campo de valor, gráficos, ícones
   pages/                  Início, Lançamentos, Contas, Orçamentos, Ajustes
-public/favicon.svg        logo (laranja com gomos formando um gráfico de pizza)
+public/orange-finance-symbol.svg  símbolo usado no cabeçalho, carregamento e favicon
+public/orange-finance-icon.svg    ícone usado para instalação do app no celular
 ```
 
 ## Modelo de sincronização

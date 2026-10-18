@@ -1,9 +1,16 @@
 # Orange Finance — Funcionalidades do app
 
-> **Versão 1.3.0**
+> **Versão 1.3.1**
 > Este arquivo descreve o que o app **já faz hoje**.
 > No final há um espaço para você escrever as funcionalidades que deseja nas próximas versões.
-> As versões anteriores são preservadas nas tags `v0.1.0`, `v1.0.0`, `v1.1.0`, `v1.2.0`, `v1.2.1`, `v1.2.2` e `v1.2.3`.
+> As versões anteriores são preservadas nas tags `v0.1.0`, `v1.0.0`, `v1.1.0`, `v1.2.0`, `v1.2.1`, `v1.2.2`, `v1.2.3` e `v1.3.0`.
+
+---
+
+## Versão 1.3.1 — identidade visual
+
+- O Symbol é usado no cabeçalho, na tela de carregamento e como favicon do navegador.
+- O Icon fornece as imagens de instalação do PWA no celular. Sem mudança de dados ou migração de banco.
 
 ---
 

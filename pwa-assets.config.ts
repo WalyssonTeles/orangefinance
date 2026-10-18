@@ -7,5 +7,5 @@ export default defineConfig({
     maskable: { ...preset.maskable, resizeOptions: { background: "#FBF7F4" } },
     apple: { ...preset.apple, resizeOptions: { background: "#FFF8F0" } },
   },
-  images: ["public/favicon.svg"],
+  images: ["public/orange-finance-icon.svg"],
 });
