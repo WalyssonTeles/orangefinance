@@ -29,10 +29,10 @@ export default defineConfig(({ mode }) => ({
         background_color: "#FBF7F4",
         theme_color: "#FBF7F4",
         icons: [
-          { src: "pwa-64x64.png", sizes: "64x64", type: "image/png" },
-          { src: "pwa-192x192.png", sizes: "192x192", type: "image/png" },
-          { src: "pwa-512x512.png", sizes: "512x512", type: "image/png" },
-          { src: "maskable-icon-512x512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          { src: `pwa-64x64.png?v=${pkg.version}`, sizes: "64x64", type: "image/png" },
+          { src: `pwa-192x192.png?v=${pkg.version}`, sizes: "192x192", type: "image/png" },
+          { src: `pwa-512x512.png?v=${pkg.version}`, sizes: "512x512", type: "image/png" },
+          { src: `maskable-icon-512x512.png?v=${pkg.version}`, sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
       workbox: {
