@@ -1,9 +1,16 @@
 # Orange Finance — Funcionalidades do app
 
-> **Versão 1.3.1**
+> **Versão 1.3.2**
 > Este arquivo descreve o que o app **já faz hoje**.
 > No final há um espaço para você escrever as funcionalidades que deseja nas próximas versões.
 > As versões anteriores são preservadas nas tags `v0.1.0`, `v1.0.0`, `v1.1.0`, `v1.2.0`, `v1.2.1`, `v1.2.2`, `v1.2.3` e `v1.3.0`.
+
+---
+
+## Versão 1.3.2 — correção dos ícones mobile
+
+- Os ícones de instalação e a tela de abertura mobile voltam a usar o logo tradicional da laranja, evitando a aparência de arco aberto do Icon.
+- O Symbol permanece no cabeçalho, no carregamento dentro do app e no favicon do navegador. Sem mudança de dados ou migração de banco.
 
 ---
 
