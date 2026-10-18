@@ -4,8 +4,9 @@ export default defineConfig({
   headLinkOptions: { preset: "2023" },
   preset: {
     ...preset,
-    maskable: { ...preset.maskable, resizeOptions: { background: "#FBF7F4" } },
-    apple: { ...preset.apple, resizeOptions: { background: "#FFF8F0" } },
+    transparent: { ...preset.transparent, padding: 0 },
+    maskable: { ...preset.maskable, padding: 0, resizeOptions: { background: "#FF7A1A" } },
+    apple: { ...preset.apple, padding: 0, resizeOptions: { background: "#FF7A1A" } },
   },
-  images: ["public/favicon.svg"],
+  images: ["public/orange-finance-icon.svg"],
 });

@@ -21,7 +21,7 @@ npm run dev        # http://localhost:5180 com recarregamento automático
 npm test           # testes unitários (Vitest)
 npm run build      # checagem de tipos + build de produção com service worker
 npm run preview    # serve o build em http://localhost:5180
-npm run icons      # regenera os ícones PWA a partir de public/favicon.svg
+npm run icons      # regenera os ícones PWA a partir de public/orange-finance-icon.svg
 ```
 
 > **Importante:** os dados do IndexedDB pertencem ao endereço exato. `localhost:5180` e `127.0.0.1:5180` são “sites” diferentes e não compartilham dados. Por isso o projeto usa sempre a porta **5180**, tanto no `dev` quanto no `preview`.
@@ -110,8 +110,9 @@ Esse fluxo requer a migração Supabase `202610170001_sheets_mirror.sql`. O vín
 
 ### Versão 1.3.2
 
-- Restaura o logo tradicional da laranja como fonte dos ícones de instalação e da tela de abertura mobile; o Symbol permanece no cabeçalho, carregamento dentro do app e favicon da aba.
-- Corrige a aparência de arco aberto do Icon nos atalhos e na tela de abertura do Android. Sem mudança de dados ou migração de banco.
+- Mantém o Icon novo nos ícones de instalação e na tela de abertura mobile; o Symbol permanece no cabeçalho, carregamento dentro do app e favicon da aba.
+- Remove a margem extra da geração e preenche o fundo dos ícones adaptável e Apple com laranja até as bordas, evitando recortes e faixas claras quando o sistema aplica sua máscara. As URLs do manifesto incluem a versão para sinalizar a atualização dos ícones.
+- Preserva os SVGs originais e o logo antigo no histórico. Sem mudança de dados ou migração de banco.
 
 ### Finanças pessoais e familiares
 
@@ -260,9 +261,9 @@ src/
     hooks.ts / router.ts  leitura reativa do banco e navegação por hash
   components/             formulários, modal/folha inferior, campo de valor, gráficos, ícones
   pages/                  Início, Lançamentos, Contas, Orçamentos, Ajustes
-public/favicon.svg                logo tradicional da laranja, fonte dos ícones de instalação
+public/favicon.svg                logo tradicional da laranja preservado
 public/orange-finance-symbol.svg  símbolo usado no cabeçalho, carregamento e favicon
-public/orange-finance-icon.svg    arte original do ícone alternativo
+public/orange-finance-icon.svg    ícone novo, fonte dos ícones de instalação
 ```
 
 ## Modelo de sincronização
