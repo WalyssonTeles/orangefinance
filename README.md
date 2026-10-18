@@ -108,6 +108,12 @@ Esse fluxo requer a migração Supabase `202610170001_sheets_mirror.sql`. O vín
 - Atualiza o logo do cabeçalho e o ícone de carregamento com o Symbol; o favicon da aba também usa o Symbol.
 - Atualiza os ícones de instalação do app no celular com o Icon. Sem mudança de dados ou migração de banco.
 
+### Versão 1.3.2
+
+- Mantém o Icon novo nos ícones de instalação e na tela de abertura mobile; o Symbol permanece no cabeçalho, carregamento dentro do app e favicon da aba.
+- Remove a margem extra da geração e preenche o fundo dos ícones adaptável e Apple com laranja até as bordas, evitando recortes e faixas claras quando o sistema aplica sua máscara. As URLs do manifesto incluem a versão para sinalizar a atualização dos ícones.
+- Preserva os SVGs originais e o logo antigo no histórico. Sem mudança de dados ou migração de banco.
+
 ### Finanças pessoais e familiares
 
 Cada conta possui um espaço **Pessoal**, que não pode receber participantes. Em **Ajustes → Espaço compartilhado → Criar novo**, crie um espaço separado, por exemplo “Nossa família”. O espaço novo começa com categorias e uma conta inicial, **sem copiar as finanças pessoais**. Na tela inicial, a seta ao lado do nome do espaço troca entre Pessoal e os compartilhados.
@@ -255,8 +261,9 @@ src/
     hooks.ts / router.ts  leitura reativa do banco e navegação por hash
   components/             formulários, modal/folha inferior, campo de valor, gráficos, ícones
   pages/                  Início, Lançamentos, Contas, Orçamentos, Ajustes
+public/favicon.svg                logo tradicional da laranja preservado
 public/orange-finance-symbol.svg  símbolo usado no cabeçalho, carregamento e favicon
-public/orange-finance-icon.svg    ícone usado para instalação do app no celular
+public/orange-finance-icon.svg    ícone novo, fonte dos ícones de instalação
 ```
 
 ## Modelo de sincronização
